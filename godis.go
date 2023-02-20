@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 )
 
 type RedisDB struct {
@@ -35,7 +36,7 @@ type RedisCommand struct {
 var server RedisServer
 var cmdTable []RedisCommand
 
-func initServer() error {
+func initServer(config *Config) error {
 	// TODO
 	return nil
 }
@@ -57,6 +58,15 @@ func initCmdTable() {
 
 func main() {
 	// TODO: load config and init server
+	path := os.Args[1]
+	config, err := LoadConfig(path)
+	if err != nil {
+		log.Printf("Config error: %v\n", err)
+	}
+	err = initServer(config)
+	if err != nil {
+		log.Printf("Init server error: %v\n", err)
+	}
 	initCmdTable()
 	log.Println("Redis server is up.")
 	server.aeLoop.AeMain()
