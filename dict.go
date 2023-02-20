@@ -6,7 +6,7 @@ type entry struct {
 	next *entry
 }
 
-type htable struct {
+type hashTable struct {
 	table []*entry
 	size  int64
 	mask  int64
@@ -20,6 +20,6 @@ type DictType interface {
 
 type Dict struct {
 	DictType
-	Htable    [2]htable
+	HashTable [2]hashTable
 	rehashidx int
 }
