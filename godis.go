@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"log"
+)
 
 type RedisDB struct {
 	data   *Dict
@@ -22,6 +24,40 @@ type RedisClient struct {
 	reply *List
 }
 
+type CommandProc func(c *RedisClient)
+
+type RedisCommand struct {
+	name  string
+	proc  CommandProc
+	arity int
+}
+
+var server RedisServer
+var cmdTable []RedisCommand
+
+func initServer() error {
+	// TODO
+	return nil
+}
+
+func getCommand(c *RedisClient) {
+	// TODO
+}
+
+func setCommand(c *RedisClient) {
+	// TODO
+}
+
+func initCmdTable() {
+	cmdTable = []RedisCommand{
+		{"get", getCommand, 2},
+		{"set", setCommand, 3},
+	}
+}
+
 func main() {
-	fmt.Println("Hello Redis!")
+	// TODO: load config and init server
+	initCmdTable()
+	log.Println("Redis server is up.")
+	server.aeLoop.AeMain()
 }
