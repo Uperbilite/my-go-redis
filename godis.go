@@ -13,6 +13,7 @@ type RedisDB struct {
 type RedisServer struct {
 	fd      int
 	port    int
+	addr    string
 	db      *RedisDB
 	clients *List
 	aeLoop  *AeLoop
@@ -38,13 +39,14 @@ var cmdTable []RedisCommand
 
 func initServer(config *Config) error {
 	server.port = config.Port
+	server.addr = config.Addr
 	server.clients = ListCreate()
 	server.db = &RedisDB{
 		data:   DictCreate(),
 		expire: DictCreate(),
 	}
 	var err error
-	server.fd, err = TcpServer(server.port, "")
+	server.fd, err = TcpServer(server.port, server.addr)
 	return err
 }
 
