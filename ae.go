@@ -14,13 +14,13 @@ const (
 	AE_ONCE   TeType = 1
 )
 
-type FileProc func(loop *AeLoop, fd int, clientData interface{}, mask FeType)
-type TimeProc func(loop *AeLoop, id int, clientData interface{}) int
+type aeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{}, mask FeType)
+type aeTimeProc func(eventLoop *AeEventLoop, id int, clientData interface{}) int
 
 type AeFileEvent struct {
 	fd         int
 	mask       FeType
-	proc       FileProc
+	fileProc   aeFileProc
 	clientData interface{}
 	next       *AeFileEvent
 }
@@ -29,23 +29,23 @@ type AeTimeEvent struct {
 	id         int
 	mask       TeType
 	when       int64
-	proc       TimeProc
+	timeProc   aeTimeProc
 	clientData interface{}
 	next       *AeTimeEvent
 }
 
-type AeLoop struct {
-	FileEvents      *AeFileEvent
-	TimeEvents      *AeTimeEvent
+type AeEventLoop struct {
 	timeEventNextId int
+	FileEventHead   *AeFileEvent
+	TimeEventHead   *AeTimeEvent
 	stop            int
 }
 
-func AeCreateLoop() *AeLoop {
+func AeCreateEventLoop() *AeEventLoop {
 	// TODO
 	return nil
 }
 
-func (loop *AeLoop) AeMain() {
+func (eventLoop *AeEventLoop) AeMain() {
 	// TODO
 }
