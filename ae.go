@@ -24,6 +24,11 @@ type AeLoop struct {
 	stop            int
 }
 
+func AeCreateLoop() *AeLoop {
+	// TODO
+	return nil
+}
+
 func (loop *AeLoop) AeMain() {
 	// TODO
 }

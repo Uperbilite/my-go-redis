@@ -23,3 +23,8 @@ type Dict struct {
 	HashTable [2]hashTable
 	rehashidx int
 }
+
+func DictCreate() *Dict {
+	// TODO
+	return nil
+}

@@ -37,8 +37,15 @@ var server RedisServer
 var cmdTable []RedisCommand
 
 func initServer(config *Config) error {
-	// TODO
-	return nil
+	server.port = config.Port
+	server.clients = ListCreate()
+	server.db = &RedisDB{
+		data:   DictCreate(),
+		expire: DictCreate(),
+	}
+	var err error
+	server.fd, err = TcpServer(server.port, "")
+	return err
 }
 
 func getCommand(c *RedisClient) {
