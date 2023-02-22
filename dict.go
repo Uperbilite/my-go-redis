@@ -1,8 +1,8 @@
 package main
 
 type entry struct {
-	key  *RedisObj
-	val  *RedisObj
+	key  *interface{}
+	val  *interface{}
 	next *entry
 }
 
@@ -13,9 +13,9 @@ type hashTable struct {
 	used  int64
 }
 
-type DictType interface {
-	HashFunc() int
-	CompareFunc() int
+type DictType struct {
+	HashFunction func(key interface{}) int
+	KeyCompare   func(key1, key2 interface{}) bool
 }
 
 type Dict struct {
@@ -24,7 +24,8 @@ type Dict struct {
 	rehashidx int
 }
 
-func DictCreate() *Dict {
-	// TODO
-	return nil
+func DictCreate(dictType DictType) *Dict {
+	var dict Dict
+	dict.DictType = dictType
+	return &dict
 }
