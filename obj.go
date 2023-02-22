@@ -10,7 +10,7 @@ const (
 )
 
 type RedisObj struct {
-	type_    RedisType
-	val_     RedisVal
+	Type_    RedisType
+	Val_     RedisVal
 	refcount int
 }

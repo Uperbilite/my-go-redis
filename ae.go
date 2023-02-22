@@ -11,11 +11,11 @@ type TeType int
 
 const (
 	AE_NORMAL TeType = 1
-	AE_ONCE   TeType = 1
+	AE_ONCE   TeType = 2
 )
 
-type aeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{}, mask FeType)
-type aeTimeProc func(eventLoop *AeEventLoop, id int, clientData interface{}) int
+type aeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{})
+type aeTimeProc func(eventLoop *AeEventLoop, id int, clientData interface{})
 
 type AeFileEvent struct {
 	fd         int
@@ -118,7 +118,7 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []AeTimeEvent, fes []AeFileEve
 		}
 	}
 	for _, fe := range fes {
-		fe.fileProc(eventLoop, fe.fd, fe.clientData, fe.mask)
+		fe.fileProc(eventLoop, fe.fd, fe.clientData)
 		eventLoop.AeDeleteFileEvent(fe.fd, fe.mask)
 	}
 }
