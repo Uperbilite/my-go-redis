@@ -16,7 +16,7 @@ type RedisServer struct {
 	addr    string
 	db      *RedisDB
 	clients *List
-	aeLoop  *AeLoop
+	aeLoop  *AeEventLoop
 }
 
 type RedisClient struct {
@@ -66,7 +66,6 @@ func initCmdTable() {
 }
 
 func main() {
-	// TODO: load config and init server
 	path := os.Args[1]
 	config, err := LoadConfig(path)
 	if err != nil {
