@@ -9,6 +9,12 @@ import (
 
 const BACKLOG = 64
 
+func Accept(fd int) (int, error) {
+	nfd, _, err := unix.Accept(fd)
+	// ignore client addr for now
+	return nfd, err
+}
+
 func addrInet4ToBytes(addr string) ([4]byte, error) {
 	var result [4]byte
 	addrs := strings.Split(addr, ".")

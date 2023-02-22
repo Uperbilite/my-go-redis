@@ -119,17 +119,35 @@ func initServer(config *Config) error {
 	return err
 }
 
+func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
+	cfd, err := Accept(fd)
+	if err != nil {
+		log.Printf("accept err: %v\n", err)
+		return
+	}
+	c := CreateClient(cfd)
+	// TODO: check max clients limit
+	server.clients.ListAddNodeHead(c)
+}
+
+// background cron per 1000ms
+func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
+	// TODO: background job
+}
+
 func main() {
 	path := os.Args[1]
 	config, err := LoadConfig(path)
 	if err != nil {
 		log.Printf("Config error: %v\n", err)
 	}
+	initCmdTable()
 	err = initServer(config)
 	if err != nil {
 		log.Printf("Init server error: %v\n", err)
 	}
-	initCmdTable()
+	server.aeLoop.AeCreateFileEvent(server.fd, AE_READABLE, AcceptHandler, nil)
+	server.aeLoop.AeCreateTimeEvent(AE_NORMAL, 1000, ServerCron, nil)
 	log.Println("Redis server is up.")
 	server.aeLoop.AeMain()
 }
