@@ -1,6 +1,7 @@
 package main
 
 import (
+	"hash/fnv"
 	"log"
 	"os"
 )
@@ -57,7 +58,7 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 	// TODO
 }
 
-func EqualRedisClient(a, b interface{}) bool {
+func RedisClientEqual(a, b interface{}) bool {
 	c1, ok := a.(*RedisClient)
 	if !ok {
 		return false
@@ -69,7 +70,7 @@ func EqualRedisClient(a, b interface{}) bool {
 	return c1.fd == c2.fd
 }
 
-func EqualRedisStr(a, b interface{}) bool {
+func RedisStrEqual(a, b interface{}) bool {
 	o1, ok := a.(*RedisObj)
 	if !ok || o1.Type_ != REDISSTR {
 		return false
@@ -86,15 +87,16 @@ func RedisStrHash(key interface{}) int {
 	if !ok || o.Type_ != REDISSTR {
 		return 0
 	}
-	// TODO: compute hash val
-	return 0
+	hash := fnv.New32()
+	hash.Write([]byte(o.Val_.(string)))
+	return int(hash.Sum32())
 }
 
 func CreateClient(fd int) *RedisClient {
 	var c RedisClient
 	c.fd = fd
 	c.db = server.db
-	c.reply = ListCreate(ListType{EqualFunc: EqualRedisStr})
+	c.reply = ListCreate(ListType{EqualFunc: RedisStrEqual})
 	server.aeLoop.AeCreateFileEvent(fd, AE_READABLE, ReadQueryFromClient, nil)
 	return &c
 }
@@ -102,15 +104,15 @@ func CreateClient(fd int) *RedisClient {
 func initServer(config *Config) error {
 	server.port = config.Port
 	server.addr = config.Addr
-	server.clients = ListCreate(ListType{EqualFunc: EqualRedisClient})
+	server.clients = ListCreate(ListType{EqualFunc: RedisClientEqual})
 	server.db = &RedisDB{
 		data: DictCreate(DictType{
 			HashFunction: RedisStrHash,
-			KeyCompare:   EqualRedisStr,
+			KeyCompare:   RedisStrEqual,
 		}),
 		expire: DictCreate(DictType{
 			HashFunction: RedisStrHash,
-			KeyCompare:   EqualRedisStr,
+			KeyCompare:   RedisStrEqual,
 		}),
 	}
 	var err error
