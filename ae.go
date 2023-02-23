@@ -10,8 +10,8 @@ const (
 type TeType int
 
 const (
-	AE_NORMAL TeType = 1
-	AE_ONCE   TeType = 2
+	AE_NORMAL TeType = 1 // repeating exec time event.
+	AE_ONCE   TeType = 2 // exec time event once.
 )
 
 type aeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{})
@@ -59,7 +59,7 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFile
 	eventLoop.FileEventHead = &fe
 }
 
-// AeDeleteFileEvent Delete by iterating file event list.
+// AeDeleteFileEvent Delete file event by iterating file event list.
 func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 	var fe, prev *AeFileEvent
 	fe = eventLoop.FileEventHead
@@ -92,6 +92,7 @@ func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, seconds int64, proc
 	return id
 }
 
+// AeDeleteTimeEvent Delete time event by id.
 func (eventLoop *AeEventLoop) AeDeleteTimeEvent(id int) {
 	var te, prev *AeTimeEvent
 	te = eventLoop.TimeEventHead

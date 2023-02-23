@@ -24,3 +24,30 @@ func (o *RedisObj) IntVal() int {
 	val, _ := strconv.Atoi(o.Val_.(string))
 	return val
 }
+
+func CreateFromInt(val int) *RedisObj {
+	return &RedisObj{
+		Type_:    REDISSTR,
+		Val_:     strconv.Itoa(val),
+		refcount: 1,
+	}
+}
+
+func CreateObject(t RedisType, ptr interface{}) *RedisObj {
+	return &RedisObj{
+		Type_:    t,
+		Val_:     ptr,
+		refcount: 1,
+	}
+}
+
+func (o *RedisObj) IncrRefCount() {
+	o.refcount++
+}
+
+func (o *RedisObj) DecrRefCount() {
+	o.refcount--
+	if o.refcount == 0 {
+		o.Val_ = nil
+	}
+}

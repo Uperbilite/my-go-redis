@@ -25,7 +25,7 @@ type RedisClient struct {
 	fd    int
 	db    *RedisDB
 	query string
-	args  []*RedisObj
+	args  []*RedisObj // get args from query string
 	reply *List
 }
 
