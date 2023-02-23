@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 type FeType int
 
 const (
@@ -29,6 +31,7 @@ type AeTimeEvent struct {
 	id         int
 	mask       TeType
 	when       int64 // sec
+	duration   int64
 	timeProc   aeTimeProc
 	clientData interface{}
 	next       *AeTimeEvent
@@ -79,13 +82,15 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
-func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, seconds int64, proc aeTimeProc, clientData interface{}) int {
+func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, duration int64, proc aeTimeProc, clientData interface{}) int {
 	id := eventLoop.timeEventNextId
 	eventLoop.timeEventNextId++
 	var te AeTimeEvent
 	te.id = id
 	te.mask = mask
-	te.when = seconds
+	te.duration = duration
+	te.when = time.Now().Unix() + duration
+	te.timeProc = proc
 	te.clientData = clientData
 	te.next = eventLoop.TimeEventHead
 	eventLoop.TimeEventHead = &te
@@ -114,7 +119,9 @@ func (eventLoop *AeEventLoop) AeDeleteTimeEvent(id int) {
 func (eventLoop *AeEventLoop) AeProcessEvents(tes []AeTimeEvent, fes []AeFileEvent) {
 	for _, te := range tes {
 		te.timeProc(eventLoop, te.id, te.clientData)
-		if te.mask == AE_ONCE {
+		if te.mask == AE_NORMAL {
+			te.when = time.Now().Unix() + te.duration
+		} else {
 			eventLoop.AeDeleteTimeEvent(te.id)
 		}
 	}
