@@ -28,7 +28,7 @@ type AeFileEvent struct {
 type AeTimeEvent struct {
 	id         int
 	mask       TeType
-	when       int64 // ms
+	when       int64 // sec
 	timeProc   aeTimeProc
 	clientData interface{}
 	next       *AeTimeEvent
@@ -79,13 +79,13 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
-func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, millseconds int64, proc aeTimeProc, clientData interface{}) int {
+func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, seconds int64, proc aeTimeProc, clientData interface{}) int {
 	id := eventLoop.timeEventNextId
 	eventLoop.timeEventNextId++
 	var te AeTimeEvent
 	te.id = id
 	te.mask = mask
-	te.when = millseconds
+	te.when = seconds
 	te.clientData = clientData
 	te.next = eventLoop.TimeEventHead
 	eventLoop.TimeEventHead = &te

@@ -4,6 +4,7 @@ import (
 	"hash/fnv"
 	"log"
 	"os"
+	"time"
 )
 
 type RedisDB struct {
@@ -37,7 +38,10 @@ type RedisCommand struct {
 }
 
 var server RedisServer
-var cmdTable []RedisCommand
+var cmdTable []RedisCommand = []RedisCommand{
+	{"get", getCommand, 2},
+	{"set", setCommand, 3},
+}
 
 func getCommand(c *RedisClient) {
 	// TODO
@@ -45,13 +49,6 @@ func getCommand(c *RedisClient) {
 
 func setCommand(c *RedisClient) {
 	// TODO
-}
-
-func initCmdTable() {
-	cmdTable = []RedisCommand{
-		{"get", getCommand, 2},
-		{"set", setCommand, 3},
-	}
 }
 
 func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
@@ -132,9 +129,20 @@ func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
 	server.clients.ListAddNodeHead(c)
 }
 
-// background cron per 1000ms
+const EXPIRE_CHECK_COUNT int = 100
+
+// ServerCron delete key randomly
 func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
-	// TODO: background job
+	for i := 0; i < EXPIRE_CHECK_COUNT; i++ {
+		key, val := server.db.expire.RandomGet()
+		if key == nil {
+			break
+		}
+		if int64(val.(*RedisObj).IntVal()) < time.Now().Unix() {
+			server.db.data.DeleteKey(key)
+			server.db.expire.DeleteKey(key)
+		}
+	}
 }
 
 func main() {
@@ -143,13 +151,12 @@ func main() {
 	if err != nil {
 		log.Printf("Config error: %v\n", err)
 	}
-	initCmdTable()
 	err = initServer(config)
 	if err != nil {
 		log.Printf("Init server error: %v\n", err)
 	}
 	server.aeLoop.AeCreateFileEvent(server.fd, AE_READABLE, AcceptHandler, nil)
-	server.aeLoop.AeCreateTimeEvent(AE_NORMAL, 1000, ServerCron, nil)
+	server.aeLoop.AeCreateTimeEvent(AE_NORMAL, 1, ServerCron, nil)
 	log.Println("Redis server is up.")
 	server.aeLoop.AeMain()
 }
