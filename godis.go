@@ -114,7 +114,7 @@ func initServer(config *Config) error {
 	}
 	var err error
 	server.fd, err = TcpServer(server.port, server.addr)
-	server.aeLoop = AeCreateEventLoop()
+	server.aeLoop, err = AeCreateEventLoop()
 	return err
 }
 

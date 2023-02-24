@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"golang.org/x/sys/unix"
+	"log"
+	"time"
+)
 
 type FeType int
 
@@ -38,21 +42,54 @@ type AeTimeEvent struct {
 }
 
 type AeEventLoop struct {
-	timeEventNextId int
 	FileEventHead   *AeFileEvent
 	TimeEventHead   *AeTimeEvent
+	fdEventCnt      map[int]int
+	epollFd         int
+	timeEventNextId int
 	stop            bool
 }
 
-func AeCreateEventLoop() *AeEventLoop {
-	var eventLoop AeEventLoop
-	eventLoop.timeEventNextId = 1
-	eventLoop.stop = false
-	return &eventLoop
+func getEpollEvent(mask FeType) uint32 {
+	if mask == AE_READABLE {
+		return unix.EPOLLIN
+	} else {
+		return unix.EPOLLOUT
+	}
+}
+
+func AeCreateEventLoop() (*AeEventLoop, error) {
+	epollFd, err := unix.EpollCreate1(0)
+	if err != nil {
+		return nil, err
+	}
+	return &AeEventLoop{
+		fdEventCnt:      make(map[int]int),
+		epollFd:         epollFd,
+		timeEventNextId: 1,
+		stop:            false,
+	}, nil
 }
 
 // AeCreateFileEvent Create a file event and insert into the head of file event list.
 func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFileProc, clientData interface{}) {
+	// epoll ctl
+	op := unix.EPOLL_CTL_ADD
+	if eventLoop.fdEventCnt[fd] > 0 {
+		op = unix.EPOLL_CTL_MOD
+	}
+	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
+		Events: getEpollEvent(mask),
+		Fd:     int32(fd),
+		Pad:    0,
+	})
+	if err != nil {
+		log.Printf("epoll ctl err: %v\n", err)
+		return
+	}
+	eventLoop.fdEventCnt[fd]++
+
+	// callback
 	var fe AeFileEvent
 	fe.fd = fd
 	fe.mask = mask
@@ -60,7 +97,6 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFile
 	fe.clientData = clientData
 	fe.next = eventLoop.FileEventHead
 	eventLoop.FileEventHead = &fe
-	// TODO: epoll clt
 }
 
 // AeDeleteFileEvent Delete file event by iterating file event list.
@@ -80,7 +116,18 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 		prev = fe
 		fe = fe.next
 	}
-	// TODO: epoll clt
+
+	// epoll ctl
+	err := unix.EpollCtl(eventLoop.epollFd, unix.EPOLL_CTL_DEL, fd, &unix.EpollEvent{
+		Events: getEpollEvent(mask),
+		Fd:     int32(fd),
+		Pad:    0,
+	})
+	if err != nil {
+		log.Printf("epoll del err: %v\n", err)
+		return
+	}
+	eventLoop.fdEventCnt[fd]--
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
