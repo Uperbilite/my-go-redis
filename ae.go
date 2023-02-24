@@ -42,9 +42,8 @@ type AeTimeEvent struct {
 }
 
 type AeEventLoop struct {
-	FileEventHead   *AeFileEvent
+	FileEvents      map[int]*AeFileEvent
 	TimeEventHead   *AeTimeEvent
-	fdEventCnt      map[int]int
 	epollFd         int
 	timeEventNextId int
 	stop            bool
@@ -52,6 +51,14 @@ type AeEventLoop struct {
 
 func GetMsTime() int64 {
 	return time.Now().UnixMilli()
+}
+
+func getFeKey(fd int, mask FeType) int {
+	if mask == AE_READABLE {
+		return fd
+	} else {
+		return fd * -1
+	}
 }
 
 func getEpollEvent(mask FeType) uint32 {
@@ -68,7 +75,7 @@ func AeCreateEventLoop() (*AeEventLoop, error) {
 		return nil, err
 	}
 	return &AeEventLoop{
-		fdEventCnt:      make(map[int]int),
+		FileEvents:      make(map[int]*AeFileEvent),
 		epollFd:         epollFd,
 		timeEventNextId: 1,
 		stop:            false,
@@ -79,7 +86,7 @@ func AeCreateEventLoop() (*AeEventLoop, error) {
 func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFileProc, clientData interface{}) {
 	// epoll ctl
 	op := unix.EPOLL_CTL_ADD
-	if eventLoop.fdEventCnt[fd] > 0 {
+	if eventLoop.FileEvents[getFeKey(fd, AE_READABLE)] != nil || eventLoop.FileEvents[getFeKey(fd, AE_WRITABLE)] != nil {
 		op = unix.EPOLL_CTL_MOD
 	}
 	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
@@ -91,7 +98,6 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFile
 		log.Printf("epoll ctl err: %v\n", err)
 		return
 	}
-	eventLoop.fdEventCnt[fd]++
 
 	// callback
 	var fe AeFileEvent
@@ -99,27 +105,12 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFile
 	fe.mask = mask
 	fe.fileProc = proc
 	fe.clientData = clientData
-	fe.next = eventLoop.FileEventHead
-	eventLoop.FileEventHead = &fe
+	eventLoop.FileEvents[getFeKey(fd, mask)] = &fe
 }
 
 // AeDeleteFileEvent Delete file event by iterating file event list.
 func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
-	var fe, prev *AeFileEvent
-	fe = eventLoop.FileEventHead
-	for fe != nil {
-		if fe.fd == fd && fe.mask == mask {
-			if prev == nil {
-				eventLoop.FileEventHead = fe.next
-			} else {
-				prev.next = fe.next
-			}
-			fe.next = nil
-			break
-		}
-		prev = fe
-		fe = fe.next
-	}
+	eventLoop.FileEvents[getFeKey(fd, mask)] = nil
 
 	// epoll ctl
 	err := unix.EpollCtl(eventLoop.epollFd, unix.EPOLL_CTL_DEL, fd, &unix.EpollEvent{
@@ -131,7 +122,6 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 		log.Printf("epoll del err: %v\n", err)
 		return
 	}
-	eventLoop.fdEventCnt[fd]--
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
@@ -196,17 +186,6 @@ func (eventLoop *AeEventLoop) nearestTime() int64 {
 	return nearest
 }
 
-func (eventLoop *AeEventLoop) getFileEvent(fd int, mask FeType) *AeFileEvent {
-	fe := eventLoop.FileEventHead
-	for fe != nil {
-		if fe.fd == fd && fe.mask == mask {
-			return fe
-		}
-		fe = fe.next
-	}
-	return nil
-}
-
 func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, err error) {
 	// TODO: error handle
 	timeout := eventLoop.nearestTime() - time.Now().UnixMilli()
@@ -223,12 +202,12 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 	// collect file event in epoll events which is ready
 	for i := 0; i < n; i++ {
 		if epollEvents[i].Events&unix.EPOLLIN != 0 {
-			fe := eventLoop.getFileEvent(int(epollEvents[i].Fd), AE_READABLE)
+			fe := eventLoop.FileEvents[getFeKey(int(epollEvents[i].Fd), AE_READABLE)]
 			if fe != nil {
 				fes = append(fes, fe)
 			}
 		} else if epollEvents[i].Events&unix.EPOLLOUT != 0 {
-			fe := eventLoop.getFileEvent(int(epollEvents[i].Fd), AE_WRITABLE)
+			fe := eventLoop.FileEvents[getFeKey(int(epollEvents[i].Fd), AE_WRITABLE)]
 			if fe != nil {
 				fes = append(fes, fe)
 			}
