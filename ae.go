@@ -61,12 +61,17 @@ func getFeKey(fd int, mask FeType) int {
 	}
 }
 
-func getEpollEvent(mask FeType) uint32 {
-	if mask == AE_READABLE {
-		return unix.EPOLLIN
-	} else {
-		return unix.EPOLLOUT
+var fe2ep [3]uint32 = [3]uint32{0, unix.EPOLLIN, unix.EPOLLOUT}
+
+func (eventLoop *AeEventLoop) getEpollMask(fd int) uint32 {
+	var ev uint32
+	if eventLoop.FileEvents[getFeKey(fd, AE_READABLE)] != nil {
+		ev |= fe2ep[AE_READABLE]
 	}
+	if eventLoop.FileEvents[getFeKey(fd, AE_WRITABLE)] != nil {
+		ev |= fe2ep[AE_WRITABLE]
+	}
+	return ev
 }
 
 func AeCreateEventLoop() (*AeEventLoop, error) {
@@ -86,11 +91,13 @@ func AeCreateEventLoop() (*AeEventLoop, error) {
 func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFileProc, clientData interface{}) {
 	// epoll ctl
 	op := unix.EPOLL_CTL_ADD
-	if eventLoop.FileEvents[getFeKey(fd, AE_READABLE)] != nil || eventLoop.FileEvents[getFeKey(fd, AE_WRITABLE)] != nil {
+	ev := eventLoop.getEpollMask(fd)
+	if ev != 0 {
 		op = unix.EPOLL_CTL_MOD
 	}
+	ev |= fe2ep[mask]
 	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
-		Events: getEpollEvent(mask),
+		Events: ev,
 		Fd:     int32(fd),
 		Pad:    0,
 	})
@@ -110,11 +117,16 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFile
 
 // AeDeleteFileEvent Delete file event by iterating file event list.
 func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
-	eventLoop.FileEvents[getFeKey(fd, mask)] = nil
-
 	// epoll ctl
-	err := unix.EpollCtl(eventLoop.epollFd, unix.EPOLL_CTL_DEL, fd, &unix.EpollEvent{
-		Events: getEpollEvent(mask),
+	op := unix.EPOLL_CTL_DEL
+	ev := eventLoop.getEpollMask(fd)
+	ev &= ^fe2ep[mask]
+	if ev != 0 {
+		op = unix.EPOLL_CTL_MOD
+	}
+
+	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
+		Events: ev,
 		Fd:     int32(fd),
 		Pad:    0,
 	})
@@ -122,6 +134,9 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 		log.Printf("epoll del err: %v\n", err)
 		return
 	}
+
+	// callback
+	eventLoop.FileEvents[getFeKey(fd, mask)] = nil
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
@@ -170,6 +185,7 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 	}
 	for _, fe := range fes {
 		fe.fileProc(eventLoop, fe.fd, fe.clientData)
+		// TODO: let client delete file events.
 		eventLoop.AeDeleteFileEvent(fe.fd, fe.mask)
 	}
 }
@@ -206,7 +222,8 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 			if fe != nil {
 				fes = append(fes, fe)
 			}
-		} else if epollEvents[i].Events&unix.EPOLLOUT != 0 {
+		}
+		if epollEvents[i].Events&unix.EPOLLOUT != 0 {
 			fe := eventLoop.FileEvents[getFeKey(int(epollEvents[i].Fd), AE_WRITABLE)]
 			if fe != nil {
 				fes = append(fes, fe)
