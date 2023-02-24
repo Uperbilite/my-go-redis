@@ -112,9 +112,15 @@ func initServer(config *Config) error {
 			KeyCompare:   RedisStrEqual,
 		}),
 	}
+
 	var err error
-	server.fd, err = TcpServer(server.port, server.addr)
 	server.aeLoop, err = AeCreateEventLoop()
+	if err != nil {
+		return err
+	}
+
+	server.fd, err = TcpServer(server.port, server.addr)
+
 	return err
 }
 

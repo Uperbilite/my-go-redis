@@ -180,15 +180,77 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 	}
 }
 
-func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent) {
-	// TODO: search time && epoll wait
-	return nil, nil
+func (eventLoop *AeEventLoop) nearestTime() int64 {
+	nearest := time.Now().UnixMilli() + 1000
+	te := eventLoop.TimeEventHead
+	for te != nil {
+		if te.when < nearest {
+			nearest = te.when
+		}
+		te = te.next
+	}
+	return nearest
+}
+
+func (eventLoop *AeEventLoop) getFileEvent(fd int, mask FeType) *AeFileEvent {
+	fe := eventLoop.FileEventHead
+	for fe != nil {
+		if fe.fd == fd && fe.mask == mask {
+			return fe
+		}
+		fe = fe.next
+	}
+	return nil
+}
+
+func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, err error) {
+	// TODO: error handle
+	timeout := eventLoop.nearestTime() - time.Now().UnixMilli()
+	if timeout <= 0 {
+		timeout = 10
+	}
+	var epollEvents [128]unix.EpollEvent
+	n, err := unix.EpollWait(eventLoop.epollFd, epollEvents[:], int(timeout))
+	if err != nil {
+		log.Printf("epoll wait err: %v\n", err)
+		return
+	}
+
+	// collect file event in epoll events which is ready
+	for i := 0; i < n; i++ {
+		if epollEvents[i].Events&unix.EPOLLIN != 0 {
+			fe := eventLoop.getFileEvent(int(epollEvents[i].Fd), AE_READABLE)
+			if fe != nil {
+				fes = append(fes, fe)
+			}
+		} else if epollEvents[i].Events&unix.EPOLLOUT != 0 {
+			fe := eventLoop.getFileEvent(int(epollEvents[i].Fd), AE_WRITABLE)
+			if fe != nil {
+				fes = append(fes, fe)
+			}
+		}
+	}
+
+	// collect time event which is ready
+	now := time.Now().UnixMilli()
+	te := eventLoop.TimeEventHead
+	for te != nil {
+		if te.when < now {
+			tes = append(tes, te)
+		}
+		te = te.next
+	}
+
+	return
 }
 
 func (eventLoop *AeEventLoop) AeMain() {
 	eventLoop.stop = false
 	for eventLoop.stop != true {
-		tes, fes := eventLoop.AeWait()
+		tes, fes, err := eventLoop.AeWait()
+		if err != nil {
+			eventLoop.stop = true
+		}
 		eventLoop.AeProcessEvents(tes, fes)
 	}
 }
