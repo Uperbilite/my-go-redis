@@ -50,6 +50,10 @@ type AeEventLoop struct {
 	stop            bool
 }
 
+func GetMsTime() int64 {
+	return time.Now().UnixMilli()
+}
+
 func getEpollEvent(mask FeType) uint32 {
 	if mask == AE_READABLE {
 		return unix.EPOLLIN
@@ -138,7 +142,7 @@ func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, duration int64, pro
 	te.id = id
 	te.mask = mask
 	te.duration = duration
-	te.when = time.Now().UnixMilli() + duration
+	te.when = GetMsTime() + duration
 	te.timeProc = proc
 	te.clientData = clientData
 	te.next = eventLoop.TimeEventHead
@@ -169,7 +173,7 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 	for _, te := range tes {
 		te.timeProc(eventLoop, te.id, te.clientData)
 		if te.mask == AE_NORMAL {
-			te.when = time.Now().UnixMilli() + te.duration
+			te.when = GetMsTime() + te.duration
 		} else {
 			eventLoop.AeDeleteTimeEvent(te.id)
 		}
@@ -181,7 +185,7 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 }
 
 func (eventLoop *AeEventLoop) nearestTime() int64 {
-	nearest := time.Now().UnixMilli() + 1000
+	nearest := GetMsTime() + 1000
 	te := eventLoop.TimeEventHead
 	for te != nil {
 		if te.when < nearest {
@@ -232,7 +236,7 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 	}
 
 	// collect time event which is ready
-	now := time.Now().UnixMilli()
+	now := GetMsTime()
 	te := eventLoop.TimeEventHead
 	for te != nil {
 		if te.when < now {
