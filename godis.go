@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
 	"os"
@@ -22,12 +24,30 @@ type RedisServer struct {
 }
 
 type RedisClient struct {
-	fd    int
-	db    *RedisDB
-	query string
-	args  []*RedisObj // get args from query string
-	reply *List
+	fd       int
+	db       *RedisDB
+	query    string
+	args     []*RedisObj // get args from query string
+	reply    *List
+	queryBuf []byte
+	queryLen int
+	cmdType  CmdType
+	bulkNum  int
+	bulkLen  int
 }
+
+type CmdType = byte
+
+const (
+	REDIS_CMD_UNKNOWN CmdType = 0x00
+	REDIS_CMD_INLINE  CmdType = 0x01
+	REDIS_CMD_BULK    CmdType = 0x02
+)
+
+const (
+	REDIS_IOBUF_LEN int = 1024 * 16
+	REDIS_BULK_MAX  int = 1024 * 4
+)
 
 type CommandProc func(c *RedisClient)
 
@@ -51,8 +71,84 @@ func setCommand(c *RedisClient) {
 	// TODO
 }
 
+func processCommand(c *RedisClient) {
+	// TODO: lookup command
+	// TODO: call command
+	// TODO: decrRef args
+}
+
+func freeClient(c *RedisClient) {
+	// TODO: delete file event
+	// TODO: decrRef reply and args list
+	// TODO: delete from clients
+}
+
+func resetClient(c *RedisClient) {
+
+}
+
+func handleInlineBuf(c *RedisClient) (bool, error) {
+	return false, nil
+}
+
+func handleBulkBuf(c *RedisClient) (bool, error) {
+	return false, nil
+}
+
+func handleQueryBuf(c *RedisClient) error {
+	for c.queryLen > 0 {
+		if c.cmdType == REDIS_CMD_UNKNOWN {
+			if c.queryBuf[0] == '*' {
+				c.cmdType = REDIS_CMD_BULK
+			} else {
+				c.cmdType = REDIS_CMD_INLINE
+			}
+		}
+		// trans query to args
+		var ok bool
+		var err error
+		if c.cmdType == REDIS_CMD_INLINE {
+			ok, err = handleInlineBuf(c)
+		} else if c.cmdType == REDIS_CMD_BULK {
+			ok, err = handleBulkBuf(c)
+		} else {
+			return errors.New("unknown command type")
+		}
+		if err != nil {
+			return err
+		}
+		if ok {
+			if len(c.args) == 0 {
+				resetClient(c)
+			} else {
+				processCommand(c)
+			}
+		} else {
+			break
+		}
+	}
+	return nil
+}
+
 func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
-	// TODO
+	// TODO: read query from client
+	// TODO: trans query -> args
+	// TODO: process command
+	c := client.(*RedisClient)
+	if len(c.queryBuf)-c.queryLen < REDIS_BULK_MAX {
+		c.queryBuf = append(c.queryBuf, make([]byte, REDIS_BULK_MAX, REDIS_BULK_MAX)...)
+	}
+	n, err := unix.Read(fd, c.queryBuf[c.queryLen:])
+	if err != nil {
+		log.Printf("client %v read err: %v\n", fd, err)
+		return
+	}
+	c.queryLen += n
+	err = handleQueryBuf(c)
+	if err != nil {
+		log.Printf("handle query buf err: %v\n", err)
+		return
+	}
 }
 
 func RedisClientEqual(a, b interface{}) bool {
@@ -93,6 +189,7 @@ func CreateClient(fd int) *RedisClient {
 	var c RedisClient
 	c.fd = fd
 	c.db = server.db
+	c.queryBuf = make([]byte, REDIS_IOBUF_LEN, REDIS_IOBUF_LEN)
 	c.reply = ListCreate(ListType{EqualFunc: RedisStrEqual})
 	server.aeLoop.AeCreateFileEvent(fd, AE_READABLE, ReadQueryFromClient, nil)
 	return &c
