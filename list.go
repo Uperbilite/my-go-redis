@@ -1,13 +1,13 @@
 package main
 
 type ListNode struct {
-	val  interface{}
+	val  *RedisObj
 	next *ListNode
 	prev *ListNode
 }
 
 type ListType struct {
-	EqualFunc func(a, b interface{}) bool
+	EqualFunc func(a, b *RedisObj) bool
 }
 
 type List struct {
@@ -22,7 +22,7 @@ func ListCreate(listType ListType) *List {
 	return &list
 }
 
-func (list *List) ListAddNodeHead(val interface{}) {
+func (list *List) ListAddNodeHead(val *RedisObj) {
 	var node ListNode
 	node.val = val
 	if list.head == nil {
@@ -35,7 +35,7 @@ func (list *List) ListAddNodeHead(val interface{}) {
 	}
 }
 
-func (list *List) ListDelNode(val interface{}) {
+func (list *List) ListDelNode(val *RedisObj) {
 	p := list.head
 	for p != nil {
 		if list.EqualFunc(p.val, val) {

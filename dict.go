@@ -1,8 +1,8 @@
 package main
 
 type entry struct {
-	key  *interface{}
-	val  *interface{}
+	key  *RedisObj
+	val  *RedisObj
 	next *entry
 }
 
@@ -14,8 +14,8 @@ type hashTable struct {
 }
 
 type DictType struct {
-	HashFunction func(key interface{}) int
-	KeyCompare   func(key1, key2 interface{}) bool
+	HashFunction func(key *RedisObj) int
+	KeyCompare   func(key1, key2 *RedisObj) bool
 }
 
 type Dict struct {
@@ -30,11 +30,11 @@ func DictCreate(dictType DictType) *Dict {
 	return &dict
 }
 
-func (dict *Dict) RandomGet() (key, val interface{}) {
+func (dict *Dict) RandomGet() (key, val *RedisObj) {
 	// TODO: get a random item in dict.
 	return nil, nil
 }
 
-func (dict *Dict) DeleteKey(key interface{}) {
+func (dict *Dict) DeleteKey(key *RedisObj) {
 	// TODO
 }

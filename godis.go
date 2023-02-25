@@ -22,7 +22,7 @@ type RedisServer struct {
 	port    int
 	addr    string
 	db      *RedisDB
-	clients *List
+	clients map[int]*RedisClient
 	aeLoop  *AeEventLoop
 }
 
@@ -176,7 +176,7 @@ func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 	return true, nil
 }
 
-func handleQueryBuf(c *RedisClient) error {
+func processQueryBuf(c *RedisClient) error {
 	for c.queryLen > 0 {
 		if c.cmdType == REDIS_CMD_UNKNOWN {
 			if c.queryBuf[0] == '*' {
@@ -185,6 +185,7 @@ func handleQueryBuf(c *RedisClient) error {
 				c.cmdType = REDIS_CMD_INLINE
 			}
 		}
+
 		// trans query to args
 		var ok bool
 		var err error
@@ -198,6 +199,7 @@ func handleQueryBuf(c *RedisClient) error {
 		if err != nil {
 			return err
 		}
+
 		if ok {
 			if len(c.args) == 0 {
 				resetClient(c)
@@ -205,6 +207,7 @@ func handleQueryBuf(c *RedisClient) error {
 				processCommand(c)
 			}
 		} else {
+			// cmd incomplete
 			break
 		}
 	}
@@ -222,47 +225,31 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 	n, err := unix.Read(fd, c.queryBuf[c.queryLen:])
 	if err != nil {
 		log.Printf("client %v read err: %v\n", fd, err)
+		freeClient(c)
 		return
 	}
 	c.queryLen += n
-	err = handleQueryBuf(c)
+	err = processQueryBuf(c)
 	if err != nil {
 		log.Printf("handle query buf err: %v\n", err)
+		freeClient(c)
 		return
 	}
 }
 
-func RedisClientEqual(a, b interface{}) bool {
-	c1, ok := a.(*RedisClient)
-	if !ok {
+func RedisStrEqual(a, b *RedisObj) bool {
+	if a.Type_ != REDISSTR || b.Type_ != REDISSTR {
 		return false
 	}
-	c2, ok := b.(*RedisClient)
-	if !ok {
-		return false
-	}
-	return c1.fd == c2.fd
+	return a.Val_.(string) == b.Val_.(string)
 }
 
-func RedisStrEqual(a, b interface{}) bool {
-	o1, ok := a.(*RedisObj)
-	if !ok || o1.Type_ != REDISSTR {
-		return false
-	}
-	o2, ok := b.(*RedisObj)
-	if !ok || o2.Type_ != REDISSTR {
-		return false
-	}
-	return o1.Val_.(string) == o2.Val_.(string)
-}
-
-func RedisStrHash(key interface{}) int {
-	o, ok := key.(*RedisObj)
-	if !ok || o.Type_ != REDISSTR {
+func RedisStrHash(key *RedisObj) int {
+	if key.Type_ != REDISSTR {
 		return 0
 	}
 	hash := fnv.New32()
-	hash.Write([]byte(o.Val_.(string)))
+	hash.Write([]byte(key.Val_.(string)))
 	return int(hash.Sum32())
 }
 
@@ -279,7 +266,7 @@ func CreateClient(fd int) *RedisClient {
 func initServer(config *Config) error {
 	server.port = config.Port
 	server.addr = config.Addr
-	server.clients = ListCreate(ListType{EqualFunc: RedisClientEqual})
+	server.clients = make(map[int]*RedisClient)
 	server.db = &RedisDB{
 		data: DictCreate(DictType{
 			HashFunction: RedisStrHash,
@@ -310,7 +297,7 @@ func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
 	}
 	c := CreateClient(cfd)
 	// TODO: check max clients limit
-	server.clients.ListAddNodeHead(c)
+	server.clients[fd] = c
 }
 
 const EXPIRE_CHECK_COUNT int = 100
@@ -322,7 +309,7 @@ func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 		if key == nil {
 			break
 		}
-		if int64(val.(*RedisObj).IntVal()) < time.Now().Unix() {
+		if int64(val.IntVal()) < time.Now().Unix() {
 			server.db.data.DeleteKey(key)
 			server.db.expire.DeleteKey(key)
 		}
