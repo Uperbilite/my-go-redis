@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -45,8 +46,9 @@ const (
 )
 
 const (
-	REDIS_IOBUF_LEN int = 1024 * 16
-	REDIS_BULK_MAX  int = 1024 * 4
+	REDIS_IOBUF_LEN  int = 1024 * 16
+	REDIS_INLINE_MAX int = 1024 * 4
+	REDIS_BULK_MAX   int = 1024 * 4
 )
 
 type CommandProc func(c *RedisClient)
@@ -87,11 +89,29 @@ func resetClient(c *RedisClient) {
 
 }
 
-func handleInlineBuf(c *RedisClient) (bool, error) {
-	return false, nil
+func handleInlineCmdBuf(c *RedisClient) (bool, error) {
+	index := strings.IndexAny(string(c.queryBuf[:c.queryLen]), "\r\n")
+	if index < 0 {
+		if c.queryLen > REDIS_INLINE_MAX {
+			return false, errors.New("too big inline cmd")
+		} else {
+			// wait to next read
+			return false, nil
+		}
+	}
+
+	subs := strings.Split(string(c.queryBuf[:index]), " ")
+	c.queryBuf = c.queryBuf[index+2:]
+	c.queryLen -= index + 2
+	c.args = make([]*RedisObj, len(subs), len(subs))
+	for i, v := range subs {
+		c.args[i] = CreateObject(REDISSTR, v)
+	}
+
+	return true, nil
 }
 
-func handleBulkBuf(c *RedisClient) (bool, error) {
+func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 	return false, nil
 }
 
@@ -108,9 +128,9 @@ func handleQueryBuf(c *RedisClient) error {
 		var ok bool
 		var err error
 		if c.cmdType == REDIS_CMD_INLINE {
-			ok, err = handleInlineBuf(c)
+			ok, err = handleInlineCmdBuf(c)
 		} else if c.cmdType == REDIS_CMD_BULK {
-			ok, err = handleBulkBuf(c)
+			ok, err = handleBulkCmdBuf(c)
 		} else {
 			return errors.New("unknown command type")
 		}
