@@ -120,6 +120,12 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 	// epoll ctl
 	op := unix.EPOLL_CTL_DEL
 	ev := eventLoop.getEpollMask(fd)
+	/*
+		File event's mask should be the same to the mask in epoll event.
+		For example, file event's mask is AE_READABLE, while epoll event's
+		mask should be EPOLLIN. Otherwise, epoll operation should be
+		EPOLL_CTL_MOD. In order to modify these two events be the same in mask.
+	*/
 	ev &= ^fe2ep[mask]
 	if ev != 0 {
 		op = unix.EPOLL_CTL_MOD
@@ -178,6 +184,10 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 	for _, te := range tes {
 		te.timeProc(eventLoop, te.id, te.clientData)
 		if te.mask == AE_NORMAL {
+			/*
+				AE_NORMAL means this event is repeating event, the
+				next time of this event's operation is updated.
+			*/
 			te.when = GetMsTime() + te.duration
 		} else {
 			eventLoop.AeDeleteTimeEvent(te.id)
@@ -206,9 +216,10 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 	// TODO: error handle
 	timeout := eventLoop.nearestTime() - time.Now().UnixMilli()
 	if timeout <= 0 {
-		timeout = 10
+		timeout = 10 // at least wait 10ms
 	}
 	var epollEvents [128]unix.EpollEvent
+	// Get prepared file events between the next time of time event and the current time.
 	n, err := unix.EpollWait(eventLoop.epollFd, epollEvents[:], int(timeout))
 	if err != nil {
 		log.Printf("epoll wait err: %v\n", err)

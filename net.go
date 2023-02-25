@@ -17,9 +17,9 @@ func Accept(fd int) (int, error) {
 
 func addrInet4ToBytes(addr string) ([4]byte, error) {
 	var result [4]byte
-	addrs := strings.Split(addr, ".")
+	as := strings.Split(addr, ".")
 	for i := 0; i < 4; i++ {
-		a, err := strconv.Atoi(addrs[i])
+		a, err := strconv.Atoi(as[i])
 		if err != nil {
 			return [4]byte{}, err
 		}

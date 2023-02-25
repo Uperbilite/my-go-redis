@@ -35,7 +35,7 @@ func (list *List) ListAddNodeHead(val interface{}) {
 	}
 }
 
-func (list *List) Remove(val interface{}) {
+func (list *List) ListDelNode(val interface{}) {
 	p := list.head
 	for p != nil {
 		if list.EqualFunc(p.val, val) {
