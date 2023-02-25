@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -89,15 +91,25 @@ func resetClient(c *RedisClient) {
 
 }
 
+func (client *RedisClient) findLineInQuery() (int, error) {
+	index := strings.IndexAny(string(client.queryBuf[:client.queryLen]), "\r\n")
+	if index < 0 && client.queryLen > REDIS_INLINE_MAX {
+		return index, errors.New("too big inline cmd")
+	}
+	return index, nil
+}
+
+func (client *RedisClient) getNumInQuery(start, end int) (int, error) {
+	num, err := strconv.Atoi(string(client.queryBuf[start:end]))
+	client.queryBuf = client.queryBuf[end+2:]
+	client.queryLen -= end + 2
+	return num, err
+}
+
 func handleInlineCmdBuf(c *RedisClient) (bool, error) {
-	index := strings.IndexAny(string(c.queryBuf[:c.queryLen]), "\r\n")
+	index, err := c.findLineInQuery()
 	if index < 0 {
-		if c.queryLen > REDIS_INLINE_MAX {
-			return false, errors.New("too big inline cmd")
-		} else {
-			// wait to next read
-			return false, nil
-		}
+		return false, err
 	}
 
 	subs := strings.Split(string(c.queryBuf[:index]), " ")
@@ -112,7 +124,56 @@ func handleInlineCmdBuf(c *RedisClient) (bool, error) {
 }
 
 func handleBulkCmdBuf(c *RedisClient) (bool, error) {
-	return false, nil
+	// read bulk num
+	if c.bulkLen == 0 {
+		index, err := c.findLineInQuery()
+		if index < 0 {
+			return false, err
+		}
+		bnum, err := c.getNumInQuery(1, index)
+		if err != nil {
+			return false, err
+		}
+		if bnum == 0 {
+			return true, nil
+		}
+		c.bulkNum = bnum
+		c.args = make([]*RedisObj, bnum, bnum)
+	}
+
+	// read every bulk string
+	for c.bulkNum > 0 {
+		// read bulk length
+		if c.bulkLen == 0 {
+			index, err := c.findLineInQuery()
+			if index < 0 {
+				return false, err
+			}
+			if c.queryBuf[0] != '$' {
+				return false, errors.New("expect $ for bulk length")
+			}
+			blen, err := c.getNumInQuery(1, index)
+			if err != nil || blen == 0 {
+				return false, err
+			}
+			c.bulkLen = blen
+		}
+		// read bulk string
+		index, err := c.findLineInQuery()
+		if index < 0 {
+			return false, err
+		}
+		if c.bulkLen != index {
+			return false, errors.New(fmt.Sprintf("expect bulk length %v, get %v", c.bulkLen, index))
+		}
+		c.args[len(c.args)-c.bulkNum] = CreateObject(REDISSTR, string(c.queryBuf[:index]))
+		c.queryBuf = c.queryBuf[index+2:]
+		c.queryLen -= index + 2
+		c.bulkLen = 0
+		c.bulkNum -= 1
+	}
+	// read every bulk
+	return true, nil
 }
 
 func handleQueryBuf(c *RedisClient) error {
