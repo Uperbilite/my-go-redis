@@ -15,6 +15,7 @@ const (
 var (
 	EP_ERR = errors.New("expand error")
 	EX_ERR = errors.New("key exists error")
+	NK_ERR = errors.New("key doesn't exist error")
 )
 
 type DictEntry struct {
@@ -214,6 +215,43 @@ func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
 		}
 	}
 	return nil
+}
+
+func freeEntry(e *DictEntry) {
+	e.Key.DecrRefCount()
+	e.Val.DecrRefCount()
+}
+
+func (dict *Dict) DictDelete(key *RedisObj) error {
+	if dict.HashTable[0].size == 0 {
+		return NK_ERR
+	}
+	if dict.DictIsRehashing() {
+		dict.DictRehashStep()
+	}
+	h := dict.HashFunction(key)
+	for i := 0; i <= 1; i++ {
+		idx := h & dict.HashTable[i].mask
+		he := dict.HashTable[i].table[idx]
+		var prevHe *DictEntry
+		for he != nil {
+			if dict.KeyCompare(he.Key, key) {
+				if prevHe == nil {
+					dict.HashTable[i].table[idx] = he.next
+				} else {
+					prevHe.next = he.next
+				}
+				freeEntry(he)
+				return nil
+			}
+			prevHe = he
+			he = he.next
+		}
+		if !dict.DictIsRehashing() {
+			break
+		}
+	}
+	return NK_ERR
 }
 
 func (dict *Dict) DictGetRandomKey() (key, val *RedisObj) {
