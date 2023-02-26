@@ -78,6 +78,8 @@ func processCommand(c *RedisClient) {
 	// TODO: lookup command
 	// TODO: call command
 	// TODO: decrRef args
+	// resetClient for testcase
+	resetClient(c)
 }
 
 func freeClient(c *RedisClient) {
@@ -87,6 +89,7 @@ func freeClient(c *RedisClient) {
 }
 
 func resetClient(c *RedisClient) {
+	c.cmdType = REDIS_CMD_UNKNOWN
 
 }
 
@@ -125,7 +128,7 @@ func handleInlineCmdBuf(c *RedisClient) (bool, error) {
 
 func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 	// read bulk num
-	if c.bulkLen == 0 {
+	if c.bulkNum == 0 {
 		index, err := c.findLineInQuery()
 		if index < 0 {
 			return false, err
