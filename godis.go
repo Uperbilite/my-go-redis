@@ -57,7 +57,7 @@ type CommandProc func(c *RedisClient)
 type RedisCommand struct {
 	name  string
 	proc  CommandProc
-	arity int
+	arity int // number of parameter
 }
 
 var server RedisServer
@@ -101,7 +101,7 @@ func (client *RedisClient) findLineInQuery() (int, error) {
 	return index, nil
 }
 
-// getBulkNumInQuery get number in bulk string, "*3\r\n..." will return 3.
+// getBulkNumInQuery get number in bulk string, "*3\r\n..." or "$3\r\n..." will return 3.
 func (client *RedisClient) getBulkNumInQuery(start, end int) (int, error) {
 	num, err := strconv.Atoi(string(client.queryBuf[start:end]))
 	client.queryBuf = client.queryBuf[end+2:]
