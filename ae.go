@@ -20,13 +20,13 @@ const (
 	AE_ONCE   TeType = 2 // exec time event once.
 )
 
-type aeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{})
-type aeTimeProc func(eventLoop *AeEventLoop, id int, clientData interface{})
+type AeFileProc func(eventLoop *AeEventLoop, fd int, clientData interface{})
+type AeTimeProc func(eventLoop *AeEventLoop, id int, clientData interface{})
 
 type AeFileEvent struct {
 	fd         int
 	mask       FeType
-	fileProc   aeFileProc
+	fileProc   AeFileProc
 	clientData interface{}
 }
 
@@ -35,7 +35,7 @@ type AeTimeEvent struct {
 	mask       TeType
 	when       int64 // ms
 	duration   int64 // ms
-	timeProc   aeTimeProc
+	timeProc   AeTimeProc
 	clientData interface{}
 	next       *AeTimeEvent
 }
@@ -87,7 +87,7 @@ func AeCreateEventLoop() (*AeEventLoop, error) {
 }
 
 // AeCreateFileEvent Create a file event and insert into the head of file event list.
-func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc aeFileProc, clientData interface{}) {
+func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFileProc, clientData interface{}) {
 	// epoll ctl
 	op := unix.EPOLL_CTL_ADD
 	ev := eventLoop.getEpollMask(fd)
@@ -145,7 +145,7 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
-func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, duration int64, proc aeTimeProc, clientData interface{}) int {
+func (eventLoop *AeEventLoop) AeCreateTimeEvent(mask TeType, duration int64, proc AeTimeProc, clientData interface{}) int {
 	id := eventLoop.timeEventNextId
 	eventLoop.timeEventNextId++
 	var te AeTimeEvent
