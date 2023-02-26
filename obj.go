@@ -25,6 +25,13 @@ func (o *RedisObj) IntVal() int {
 	return val
 }
 
+func (o *RedisObj) StrVal() string {
+	if o.Type_ != REDISSTR {
+		return ""
+	}
+	return o.Val_.(string)
+}
+
 func CreateFromInt(val int) *RedisObj {
 	return &RedisObj{
 		Type_:    REDISSTR,

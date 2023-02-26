@@ -1,13 +1,13 @@
 package main
 
-type entry struct {
+type Entry struct {
 	key  *RedisObj
 	val  *RedisObj
-	next *entry
+	next *Entry
 }
 
 type hashTable struct {
-	table []*entry
+	table []*Entry
 	size  int64
 	mask  int64
 	used  int64

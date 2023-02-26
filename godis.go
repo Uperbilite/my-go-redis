@@ -248,7 +248,7 @@ func SendReplyToClient(el *AeEventLoop, fd int, client interface{}) {
 	c := client.(*RedisClient)
 	for c.reply.ListLength() > 0 {
 		rep := c.reply.ListFirst()
-		buf := []byte(rep.Val.Val_.(string))
+		buf := []byte(rep.Val.StrVal())
 		bufLen := len(buf)
 		if c.sentLen < bufLen {
 			n, err := Write(fd, buf[c.sentLen:])
@@ -277,7 +277,7 @@ func RedisStrEqual(a, b *RedisObj) bool {
 	if a.Type_ != REDISSTR || b.Type_ != REDISSTR {
 		return false
 	}
-	return a.Val_.(string) == b.Val_.(string)
+	return a.StrVal() == b.StrVal()
 }
 
 func RedisStrHash(key *RedisObj) int {
@@ -285,7 +285,7 @@ func RedisStrHash(key *RedisObj) int {
 		return 0
 	}
 	hash := fnv.New32()
-	hash.Write([]byte(key.Val_.(string)))
+	hash.Write([]byte(key.StrVal()))
 	return int(hash.Sum32())
 }
 
