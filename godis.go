@@ -156,6 +156,9 @@ func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 			if err != nil || blen == 0 {
 				return false, err
 			}
+			if blen > REDIS_BULK_MAX {
+				return false, errors.New("too big bulk")
+			}
 			c.bulkLen = blen
 		}
 		// read bulk string

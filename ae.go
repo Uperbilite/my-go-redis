@@ -28,7 +28,6 @@ type AeFileEvent struct {
 	mask       FeType
 	fileProc   aeFileProc
 	clientData interface{}
-	next       *AeFileEvent
 }
 
 type AeTimeEvent struct {
@@ -189,7 +188,8 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 				next time of this event's operation is updated.
 			*/
 			te.when = GetMsTime() + te.duration
-		} else {
+		}
+		if te.mask == AE_ONCE {
 			eventLoop.AeDeleteTimeEvent(te.id)
 		}
 	}
