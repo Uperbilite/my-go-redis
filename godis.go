@@ -32,11 +32,11 @@ type RedisClient struct {
 	query    string
 	args     []*RedisObj // get args from query string
 	reply    *List
-	queryBuf []byte
-	queryLen int
+	queryBuf []byte // unhandled query content
+	queryLen int    // unhandled query content len
 	cmdType  CmdType
-	bulkNum  int
-	bulkLen  int
+	bulkNum  int // number of bulk strings
+	bulkLen  int // len of each bulk string
 }
 
 type CmdType = byte
@@ -99,7 +99,8 @@ func (client *RedisClient) findLineInQuery() (int, error) {
 	return index, nil
 }
 
-func (client *RedisClient) getNumInQuery(start, end int) (int, error) {
+// getBulkNumInQuery get number in bulk string, "*3\r\n..." will return 3.
+func (client *RedisClient) getBulkNumInQuery(start, end int) (int, error) {
 	num, err := strconv.Atoi(string(client.queryBuf[start:end]))
 	client.queryBuf = client.queryBuf[end+2:]
 	client.queryLen -= end + 2
@@ -113,7 +114,7 @@ func handleInlineCmdBuf(c *RedisClient) (bool, error) {
 	}
 
 	subs := strings.Split(string(c.queryBuf[:index]), " ")
-	c.queryBuf = c.queryBuf[index+2:]
+	c.queryBuf = c.queryBuf[index+2:] // plus 2 to skip "/r/n"
 	c.queryLen -= index + 2
 	c.args = make([]*RedisObj, len(subs), len(subs))
 	for i, v := range subs {
@@ -130,7 +131,7 @@ func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 		if index < 0 {
 			return false, err
 		}
-		bnum, err := c.getNumInQuery(1, index)
+		bnum, err := c.getBulkNumInQuery(1, index)
 		if err != nil {
 			return false, err
 		}
@@ -152,7 +153,7 @@ func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 			if c.queryBuf[0] != '$' {
 				return false, errors.New("expect $ for bulk length")
 			}
-			blen, err := c.getNumInQuery(1, index)
+			blen, err := c.getBulkNumInQuery(1, index)
 			if err != nil || blen == 0 {
 				return false, err
 			}
@@ -202,12 +203,13 @@ func processQueryBuf(c *RedisClient) error {
 
 		if ok {
 			if len(c.args) == 0 {
+				// accept empty command
 				resetClient(c)
 			} else {
 				processCommand(c)
 			}
 		} else {
-			// cmd incomplete
+			// command incomplete
 			break
 		}
 	}
