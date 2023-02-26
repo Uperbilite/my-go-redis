@@ -43,7 +43,7 @@ type AeTimeEvent struct {
 type AeEventLoop struct {
 	FileEvents      map[int]*AeFileEvent
 	TimeEventHead   *AeTimeEvent
-	epollFd         int
+	epfd            int
 	timeEventNextId int
 	stop            bool
 }
@@ -62,6 +62,7 @@ func getFeKey(fd int, mask FeType) int {
 
 var fe2ep [3]uint32 = [3]uint32{0, unix.EPOLLIN, unix.EPOLLOUT}
 
+// getEpollMask get epoll event type by file event.
 func (eventLoop *AeEventLoop) getEpollMask(fd int) uint32 {
 	var ev uint32
 	if eventLoop.FileEvents[getFeKey(fd, AE_READABLE)] != nil {
@@ -74,13 +75,13 @@ func (eventLoop *AeEventLoop) getEpollMask(fd int) uint32 {
 }
 
 func AeCreateEventLoop() (*AeEventLoop, error) {
-	epollFd, err := unix.EpollCreate1(0)
+	epfd, err := unix.EpollCreate1(0)
 	if err != nil {
 		return nil, err
 	}
 	return &AeEventLoop{
 		FileEvents:      make(map[int]*AeFileEvent),
-		epollFd:         epollFd,
+		epfd:            epfd,
 		timeEventNextId: 1,
 		stop:            false,
 	}, nil
@@ -95,7 +96,7 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFile
 		op = unix.EPOLL_CTL_MOD
 	}
 	ev |= fe2ep[mask]
-	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
+	err := unix.EpollCtl(eventLoop.epfd, op, fd, &unix.EpollEvent{
 		Events: ev,
 		Fd:     int32(fd),
 		Pad:    0,
@@ -105,7 +106,7 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFile
 		return
 	}
 
-	// callback
+	// ae ctl
 	var fe AeFileEvent
 	fe.fd = fd
 	fe.mask = mask
@@ -120,17 +121,15 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 	op := unix.EPOLL_CTL_DEL
 	ev := eventLoop.getEpollMask(fd)
 	/*
-		File event's mask should be the same to the mask in epoll event.
-		For example, file event's mask is AE_READABLE, while epoll event's
-		mask should be EPOLLIN. Otherwise, epoll operation should be
-		EPOLL_CTL_MOD. In order to modify these two events be the same in mask.
+		Get events except the event which is mapped from file event
+		type. If there are events left, then modify this epoll event.
+		Otherwise, delete this epoll event.
 	*/
 	ev &= ^fe2ep[mask]
 	if ev != 0 {
 		op = unix.EPOLL_CTL_MOD
 	}
-
-	err := unix.EpollCtl(eventLoop.epollFd, op, fd, &unix.EpollEvent{
+	err := unix.EpollCtl(eventLoop.epfd, op, fd, &unix.EpollEvent{
 		Events: ev,
 		Fd:     int32(fd),
 		Pad:    0,
@@ -140,7 +139,7 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 		return
 	}
 
-	// callback
+	// ae ctl
 	eventLoop.FileEvents[getFeKey(fd, mask)] = nil
 }
 
@@ -182,14 +181,14 @@ func (eventLoop *AeEventLoop) AeDeleteTimeEvent(id int) {
 func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileEvent) {
 	for _, te := range tes {
 		te.timeProc(eventLoop, te.id, te.clientData)
-		if te.mask == AE_NORMAL {
+		switch te.mask {
+		case AE_NORMAL:
 			/*
 				AE_NORMAL means this event is repeating event, the
 				next time of this event's operation is updated.
 			*/
 			te.when = GetMsTime() + te.duration
-		}
-		if te.mask == AE_ONCE {
+		case AE_ONCE:
 			eventLoop.AeDeleteTimeEvent(te.id)
 		}
 	}
@@ -200,6 +199,7 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 	}
 }
 
+// nearestTime get the nearest time of the next time event.
 func (eventLoop *AeEventLoop) nearestTime() int64 {
 	nearest := GetMsTime() + 1000
 	te := eventLoop.TimeEventHead
@@ -219,14 +219,13 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 		timeout = 10 // at least wait 10ms
 	}
 	var epollEvents [128]unix.EpollEvent
-	// Get prepared file events between the next time of time event and the current time.
-	n, err := unix.EpollWait(eventLoop.epollFd, epollEvents[:], int(timeout))
+	n, err := unix.EpollWait(eventLoop.epfd, epollEvents[:], int(timeout))
 	if err != nil {
 		log.Printf("epoll wait err: %v\n", err)
 		return
 	}
 
-	// collect file event in epoll events which is ready
+	// collect file event which is ready
 	for i := 0; i < n; i++ {
 		if epollEvents[i].Events&unix.EPOLLIN != 0 {
 			fe := eventLoop.FileEvents[getFeKey(int(epollEvents[i].Fd), AE_READABLE)]
