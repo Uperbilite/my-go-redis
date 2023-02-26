@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
@@ -160,12 +159,12 @@ func handleBulkCmdBuf(c *RedisClient) (bool, error) {
 			c.bulkLen = blen
 		}
 		// read bulk string
-		index, err := c.findLineInQuery()
-		if index < 0 {
-			return false, err
+		if c.queryLen < c.bulkLen+2 {
+			return false, nil
 		}
-		if c.bulkLen != index {
-			return false, errors.New(fmt.Sprintf("expect bulk length %v, get %v", c.bulkLen, index))
+		index := c.bulkLen
+		if c.queryBuf[index] != '\r' || c.queryBuf[index+1] != '\n' {
+			return false, errors.New("expect CRLF for bulk string end")
 		}
 		c.args[len(c.args)-c.bulkNum] = CreateObject(REDISSTR, string(c.queryBuf[:index]))
 		c.queryBuf = c.queryBuf[index+2:]
