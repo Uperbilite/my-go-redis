@@ -8,7 +8,7 @@ import (
 
 const (
 	DICT_HT_INITIAL_SIZE     int64 = 8
-	DICT_FORCE_RESIZE_RATIO  int64 = 3
+	DICT_FORCE_RESIZE_RATIO  int64 = 2
 	DICT_HT_GROW_RATIO       int64 = 2
 	DICT_DEFAULT_REHASH_STEP int64 = 1
 )
@@ -46,6 +46,7 @@ type Dict struct {
 func DictCreate(dictType DictType) *Dict {
 	var dict Dict
 	dict.DictType = dictType
+	dict.rehashidx = -1
 	return &dict
 }
 
@@ -103,7 +104,7 @@ func dictNextPower(size int64) int64 {
 
 func (dict *Dict) DictExpand(size int64) error {
 	realSize := dictNextPower(size)
-	if dict.DictIsRehashing() || dict.HashTable[0].used > size {
+	if dict.DictIsRehashing() || (dict.HashTable[0] != nil && dict.HashTable[0].size >= realSize) {
 		return EP_ERR
 	}
 
@@ -129,7 +130,7 @@ func (dict *Dict) dictExpandIfNeeded() error {
 	if dict.DictIsRehashing() {
 		return nil
 	}
-	if dict.HashTable[0].size == 0 {
+	if dict.HashTable[0] == nil {
 		return dict.DictExpand(DICT_HT_INITIAL_SIZE)
 	}
 	if (dict.HashTable[0].used > dict.HashTable[0].size) && (dict.HashTable[0].used/dict.HashTable[0].size > DICT_FORCE_RESIZE_RATIO) {
@@ -179,6 +180,7 @@ func (dict *Dict) DictAddRaw(key *RedisObj) *DictEntry {
 	}
 
 	var e DictEntry
+	e.Key = key
 	e.next = ht.table[idx]
 	ht.table[idx] = &e
 	ht.used += 1
@@ -195,7 +197,7 @@ func (dict *Dict) DictAdd(key, val *RedisObj) error {
 }
 
 func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
-	if dict.HashTable[0].size == 0 {
+	if dict.HashTable[0] == nil {
 		return nil
 	}
 	if dict.DictIsRehashing() {
@@ -224,7 +226,7 @@ func freeEntry(e *DictEntry) {
 }
 
 func (dict *Dict) DictDelete(key *RedisObj) error {
-	if dict.HashTable[0].size == 0 {
+	if dict.HashTable[0] == nil {
 		return NK_ERR
 	}
 	if dict.DictIsRehashing() {
@@ -256,13 +258,13 @@ func (dict *Dict) DictDelete(key *RedisObj) error {
 }
 
 func (dict *Dict) DictGetRandomKey() *DictEntry {
-	if dict.HashTable[0].size == 0 || dict.HashTable[0].used == 0 {
+	if dict.HashTable[0] == nil {
 		return nil
 	}
 	t := 0
 	if dict.DictIsRehashing() {
 		dict.DictRehashStep()
-		if dict.HashTable[1].used > dict.HashTable[0].used {
+		if dict.HashTable[1] != nil && dict.HashTable[1].used > dict.HashTable[0].used {
 			t = 1
 		}
 	}

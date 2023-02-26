@@ -341,13 +341,13 @@ const EXPIRE_CHECK_COUNT int = 100
 // ServerCron delete key randomly
 func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 	for i := 0; i < EXPIRE_CHECK_COUNT; i++ {
-		key, val := server.db.expire.DictGetRandomKey()
-		if key == nil {
+		entry := server.db.expire.DictGetRandomKey()
+		if entry.Key == nil {
 			break
 		}
-		if int64(val.IntVal()) < time.Now().Unix() {
-			server.db.data.DictDeleteKey(key)
-			server.db.expire.DictDeleteKey(key)
+		if int64(entry.Val.IntVal()) < time.Now().Unix() {
+			server.db.data.DictDelete(entry.Key)
+			server.db.expire.DictDelete(entry.Key)
 		}
 	}
 }
