@@ -1,27 +1,27 @@
 package main
 
-type Entry struct {
+type DictEntry struct {
 	key  *RedisObj
 	val  *RedisObj
-	next *Entry
+	next *DictEntry
 }
 
-type hashTable struct {
-	table []*Entry
+type DictHashTable struct {
+	table []*DictEntry
 	size  int64
 	mask  int64
 	used  int64
 }
 
 type DictType struct {
-	HashFunction func(key *RedisObj) int
+	HashFunction func(key *RedisObj) int64
 	KeyCompare   func(key1, key2 *RedisObj) bool
 }
 
 type Dict struct {
 	DictType
-	HashTable [2]hashTable
-	rehashidx int
+	HashTable [2]DictHashTable
+	rehashidx int64
 }
 
 func DictCreate(dictType DictType) *Dict {
@@ -30,11 +30,27 @@ func DictCreate(dictType DictType) *Dict {
 	return &dict
 }
 
-func (dict *Dict) RandomGet() (key, val *RedisObj) {
+func (dict *Dict) DictIsRehashing() bool {
+	return dict.rehashidx != -1
+}
+
+func dictNextPower(size int64) int64 {
+	return 0
+}
+
+func (dict *Dict) dictExpandIfNeeded() {
+
+}
+
+func (dict *Dict) DictExpand(size int64) {
+
+}
+
+func (dict *Dict) DictGetRandomKey() (key, val *RedisObj) {
 	// TODO: get a random item in dict.
 	return nil, nil
 }
 
-func (dict *Dict) DeleteKey(key *RedisObj) {
+func (dict *Dict) DictDeleteKey(key *RedisObj) {
 	// TODO
 }

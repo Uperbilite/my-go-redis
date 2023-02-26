@@ -280,13 +280,13 @@ func RedisStrEqual(a, b *RedisObj) bool {
 	return a.StrVal() == b.StrVal()
 }
 
-func RedisStrHash(key *RedisObj) int {
+func RedisStrHash(key *RedisObj) int64 {
 	if key.Type_ != REDISSTR {
 		return 0
 	}
-	hash := fnv.New32()
+	hash := fnv.New64()
 	hash.Write([]byte(key.StrVal()))
-	return int(hash.Sum32())
+	return int64(hash.Sum64())
 }
 
 func CreateClient(fd int) *RedisClient {
@@ -341,13 +341,13 @@ const EXPIRE_CHECK_COUNT int = 100
 // ServerCron delete key randomly
 func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 	for i := 0; i < EXPIRE_CHECK_COUNT; i++ {
-		key, val := server.db.expire.RandomGet()
+		key, val := server.db.expire.DictGetRandomKey()
 		if key == nil {
 			break
 		}
 		if int64(val.IntVal()) < time.Now().Unix() {
-			server.db.data.DeleteKey(key)
-			server.db.expire.DeleteKey(key)
+			server.db.data.DictDeleteKey(key)
+			server.db.expire.DictDeleteKey(key)
 		}
 	}
 }
