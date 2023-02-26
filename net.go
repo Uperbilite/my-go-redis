@@ -15,6 +15,23 @@ func Accept(fd int) (int, error) {
 	return nfd, err
 }
 
+func Connect(host [4]byte, port int) (int, error) {
+	s, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, 0)
+	if err != nil {
+		log.Printf("init socket err: %v\n", err)
+		return -1, err
+	}
+	var sockAddr unix.SockaddrInet4
+	sockAddr.Addr = host
+	sockAddr.Port = port
+	err = unix.Connect(s, &sockAddr)
+	if err != nil {
+		log.Printf("connect err: %v\n", err)
+		return -1, err
+	}
+	return s, nil
+}
+
 func addrInet4ToBytes(addr string) ([4]byte, error) {
 	var result [4]byte
 	as := strings.Split(addr, ".")
@@ -30,7 +47,6 @@ func addrInet4ToBytes(addr string) ([4]byte, error) {
 
 func TcpServer(port int, addr string) (int, error) {
 	s, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, 0)
-	defer unix.Close(s)
 	if err != nil {
 		log.Printf("init socket err: %v\n", err)
 		return -1, nil
