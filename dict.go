@@ -6,13 +6,15 @@ import (
 )
 
 const (
-	DICT_HT_INITIAL_SIZE    int64 = 8
-	DICT_FORCE_RESIZE_RATIO int64 = 3
-	DICT_HT_GROW_RATIO      int64 = 2
+	DICT_HT_INITIAL_SIZE     int64 = 8
+	DICT_FORCE_RESIZE_RATIO  int64 = 3
+	DICT_HT_GROW_RATIO       int64 = 2
+	DICT_DEFAULT_REHASH_STEP int64 = 1
 )
 
 var (
 	EP_ERR = errors.New("expand error")
+	EX_ERR = errors.New("key exists error")
 )
 
 type DictEntry struct {
@@ -49,7 +51,7 @@ func (dict *Dict) DictIsRehashing() bool {
 	return dict.rehashidx != -1
 }
 
-func (dict *Dict) DictRehash(step int) {
+func (dict *Dict) DictRehash(step int64) {
 	for step > 0 {
 		// exchange hash table if rehash is completed.
 		if dict.HashTable[0].used == 0 {
@@ -81,6 +83,11 @@ func (dict *Dict) DictRehash(step int) {
 		dict.rehashidx += 1
 		step -= 1
 	}
+}
+
+func (dict *Dict) DictRehashStep() {
+	// TODO: if dict->iterators == 0
+	dict.DictRehash(DICT_DEFAULT_REHASH_STEP)
 }
 
 func dictNextPower(size int64) int64 {
@@ -126,6 +133,62 @@ func (dict *Dict) dictExpandIfNeeded() error {
 	if (dict.HashTable[0].used > dict.HashTable[0].size) && (dict.HashTable[0].used/dict.HashTable[0].size > DICT_FORCE_RESIZE_RATIO) {
 		return dict.DictExpand(dict.HashTable[0].size * DICT_HT_GROW_RATIO)
 	}
+	return nil
+}
+
+func (dict *Dict) DictKeyIndex(key *RedisObj) int64 {
+	err := dict.dictExpandIfNeeded()
+	if err != nil {
+		return -1
+	}
+	h := dict.HashFunction(key)
+	var idx int64
+	for i := 0; i <= 1; i++ {
+		idx = h & dict.HashTable[i].mask
+		he := dict.HashTable[i].table[idx]
+		for he != nil {
+			if dict.KeyCompare(he.key, key) {
+				return -1
+			}
+			he = he.next
+		}
+		if !dict.DictIsRehashing() {
+			break
+		}
+	}
+	return idx
+}
+
+func (dict *Dict) DictAddRaw(key *RedisObj) *DictEntry {
+	if dict.DictIsRehashing() {
+		dict.DictRehashStep()
+	}
+	idx := dict.DictKeyIndex(key)
+	if idx == -1 {
+		return nil
+	}
+
+	// add key and return entry
+	var ht *DictHashTable
+	if dict.DictIsRehashing() {
+		ht = dict.HashTable[1]
+	} else {
+		ht = dict.HashTable[0]
+	}
+
+	var e DictEntry
+	e.next = ht.table[idx]
+	ht.table[idx] = &e
+	ht.used += 1
+	return &e
+}
+
+func (dict *Dict) DictAdd(key, val *RedisObj) error {
+	entry := dict.DictAddRaw(key)
+	if entry == nil {
+		return EX_ERR
+	}
+	entry.val = val
 	return nil
 }
 
