@@ -192,6 +192,30 @@ func (dict *Dict) DictAdd(key, val *RedisObj) error {
 	return nil
 }
 
+func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
+	if dict.HashTable[0].size == 0 {
+		return nil
+	}
+	if dict.DictIsRehashing() {
+		dict.DictRehashStep()
+	}
+	h := dict.HashFunction(key)
+	for i := 0; i <= 1; i++ {
+		idx := h & dict.HashTable[i].mask
+		e := dict.HashTable[i].table[idx]
+		if e != nil {
+			if dict.KeyCompare(e.Key, key) {
+				return e
+			}
+			e = e.next
+		}
+		if !dict.DictIsRehashing() {
+			break
+		}
+	}
+	return nil
+}
+
 func (dict *Dict) DictGetRandomKey() (key, val *RedisObj) {
 	// TODO: get a random item in dict.
 	return nil, nil
