@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"math"
+	"math/rand"
 )
 
 const (
@@ -254,11 +255,37 @@ func (dict *Dict) DictDelete(key *RedisObj) error {
 	return NK_ERR
 }
 
-func (dict *Dict) DictGetRandomKey() (key, val *RedisObj) {
-	// TODO: get a random item in dict.
-	return nil, nil
-}
+func (dict *Dict) DictGetRandomKey() *DictEntry {
+	if dict.HashTable[0].size == 0 || dict.HashTable[0].used == 0 {
+		return nil
+	}
+	t := 0
+	if dict.DictIsRehashing() {
+		dict.DictRehashStep()
+		if dict.HashTable[1].used > dict.HashTable[0].used {
+			t = 1
+		}
+	}
+	idx := rand.Int63n(dict.HashTable[t].size)
+	cnt := 0
+	for dict.HashTable[t].table[idx] == nil && cnt < 1000 {
+		idx = rand.Int63n(dict.HashTable[t].size)
+		cnt += 1
+	}
+	if dict.HashTable[t].table[idx] == nil {
+		return nil
+	}
 
-func (dict *Dict) DictDeleteKey(key *RedisObj) {
-	// TODO
+	var listLen int64
+	p := dict.HashTable[t].table[idx]
+	for p != nil {
+		listLen += 1
+		p = p.next
+	}
+	listIdx := rand.Int63n(listLen)
+	p = dict.HashTable[t].table[idx]
+	for i := int64(0); i < listIdx; i++ {
+		p = p.next
+	}
+	return p
 }
