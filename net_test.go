@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/sys/unix"
 	"testing"
 )
 
@@ -18,9 +17,9 @@ func EchoServer(end chan struct{}) {
 		fmt.Printf("server accept error: %v\n", err)
 	}
 	buf := make([]byte, 10)
-	n, err := unix.Read(cfd, buf)
+	n, err := Read(cfd, buf)
 	fmt.Printf("server read %v bytes\n", n)
-	n, err = unix.Write(cfd, buf)
+	n, err = Write(cfd, buf)
 	if err != nil {
 		fmt.Printf("server write error: %v\n", err)
 	}
@@ -36,11 +35,11 @@ func TestNet(t *testing.T) {
 	cfd, err := Connect(host, 6379)
 	assert.Nil(t, err)
 	msg := "helloworld"
-	n, err := unix.Write(cfd, []byte(msg))
+	n, err := Write(cfd, []byte(msg))
 	assert.Nil(t, err)
 	assert.Equal(t, 10, n)
 	buf := make([]byte, 10)
-	n, err = unix.Read(cfd, buf)
+	n, err = Read(cfd, buf)
 	assert.Nil(t, err)
 	assert.Equal(t, 10, n)
 	assert.Equal(t, msg, string(buf))

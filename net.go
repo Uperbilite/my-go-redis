@@ -9,6 +9,14 @@ import (
 
 const BACKLOG = 64
 
+func Write(fd int, buf []byte) (int, error) {
+	return unix.Write(fd, buf)
+}
+
+func Read(fd int, buf []byte) (int, error) {
+	return unix.Read(fd, buf)
+}
+
 func Accept(fd int) (int, error) {
 	nfd, _, err := unix.Accept(fd)
 	// ignore client addr for now

@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
 	"os"
@@ -227,7 +226,7 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 	if len(c.queryBuf)-c.queryLen < REDIS_BULK_MAX {
 		c.queryBuf = append(c.queryBuf, make([]byte, REDIS_BULK_MAX, REDIS_BULK_MAX)...)
 	}
-	n, err := unix.Read(fd, c.queryBuf[c.queryLen:])
+	n, err := Read(fd, c.queryBuf[c.queryLen:])
 	if err != nil {
 		log.Printf("client %v read err: %v\n", fd, err)
 		freeClient(c)
@@ -249,7 +248,7 @@ func SendReplyToClient(el *AeEventLoop, fd int, client interface{}) {
 		buf := []byte(rep.Val.Val_.(string))
 		bufLen := len(buf)
 		if c.sentLen < bufLen {
-			n, err := unix.Write(fd, buf[c.sentLen:])
+			n, err := Write(fd, buf[c.sentLen:])
 			if err != nil {
 				log.Printf("send reply err: %v\n", err)
 				freeClient(c)
