@@ -31,6 +31,7 @@ type RedisClient struct {
 	query    string
 	args     []*RedisObj // get args from query string
 	reply    *List
+	sentLen  int
 	queryBuf []byte // unhandled query content
 	queryLen int    // unhandled query content len
 	cmdType  CmdType
@@ -238,6 +239,35 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 		log.Printf("handle query buf err: %v\n", err)
 		freeClient(c)
 		return
+	}
+}
+
+func SendReplyToClient(el *AeEventLoop, fd int, client interface{}) {
+	c := client.(*RedisClient)
+	for c.reply.ListLength() > 0 {
+		rep := c.reply.ListFirst()
+		buf := []byte(rep.Val.Val_.(string))
+		bufLen := len(buf)
+		if c.sentLen < bufLen {
+			n, err := unix.Write(fd, buf[c.sentLen:])
+			if err != nil {
+				log.Printf("send reply err: %v\n", err)
+				freeClient(c)
+				return
+			}
+			c.sentLen += n
+			if c.sentLen == bufLen {
+				c.reply.ListDelNode(rep)
+				rep.Val.DecrRefCount()
+				c.sentLen = 0
+			} else {
+				break
+			}
+		}
+	}
+	if c.reply.ListLength() == 0 {
+		c.sentLen = 0
+		el.AeDeleteFileEvent(fd, AE_WRITABLE)
 	}
 }
 
