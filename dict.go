@@ -18,8 +18,8 @@ var (
 )
 
 type DictEntry struct {
-	key  *RedisObj
-	val  *RedisObj
+	Key  *RedisObj
+	Val  *RedisObj
 	next *DictEntry
 }
 
@@ -71,7 +71,7 @@ func (dict *Dict) DictRehash(step int64) {
 		de = dict.HashTable[0].table[dict.rehashidx]
 		for de != nil {
 			nextDe = de.next
-			h := dict.HashFunction(de.key) & dict.HashTable[1].mask
+			h := dict.HashFunction(de.Key) & dict.HashTable[1].mask
 			de.next = dict.HashTable[1].table[h]
 			dict.HashTable[1].table[h] = de
 			dict.HashTable[1].used += 1
@@ -147,7 +147,7 @@ func (dict *Dict) DictKeyIndex(key *RedisObj) int64 {
 		idx = h & dict.HashTable[i].mask
 		he := dict.HashTable[i].table[idx]
 		for he != nil {
-			if dict.KeyCompare(he.key, key) {
+			if dict.KeyCompare(he.Key, key) {
 				return -1
 			}
 			he = he.next
@@ -188,7 +188,7 @@ func (dict *Dict) DictAdd(key, val *RedisObj) error {
 	if entry == nil {
 		return EX_ERR
 	}
-	entry.val = val
+	entry.Val = val
 	return nil
 }
 
