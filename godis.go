@@ -94,7 +94,7 @@ func resetClient(c *RedisClient) {
 }
 
 func (client *RedisClient) findLineInQuery() (int, error) {
-	index := strings.IndexAny(string(client.queryBuf[:client.queryLen]), "\r\n")
+	index := strings.Index(string(client.queryBuf[:client.queryLen]), "\r\n")
 	if index < 0 && client.queryLen > REDIS_INLINE_MAX {
 		return index, errors.New("too big inline cmd")
 	}

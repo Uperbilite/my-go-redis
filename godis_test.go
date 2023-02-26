@@ -41,23 +41,29 @@ func TestInlineCmdBuf(t *testing.T) {
 
 func TestBulkCmdBuf(t *testing.T) {
 	c := CreateClient(0)
+
 	ReadQuery(c, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$3\r\nval\r\n")
 	ok, err := handleBulkCmdBuf(c)
 	assert.Nil(t, err)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, 3, len(c.args))
 
-	ReadQuery(c, "*3\r\n$3\r\nSET\r\n$3")
+	ReadQuery(c, "*3\r")
 	ok, err = handleBulkCmdBuf(c)
 	assert.Nil(t, err)
 	assert.Equal(t, false, ok)
 
-	ReadQuery(c, "\r\nkey\r\n")
+	ReadQuery(c, "\n$3\r\nSET\r\n$3")
 	ok, err = handleBulkCmdBuf(c)
 	assert.Nil(t, err)
 	assert.Equal(t, false, ok)
 
-	ReadQuery(c, "$3\r\nval\r\n")
+	ReadQuery(c, "\r\nkey\r")
+	ok, err = handleBulkCmdBuf(c)
+	assert.Nil(t, err)
+	assert.Equal(t, false, ok)
+
+	ReadQuery(c, "\n$3\r\nval\r\n")
 	ok, err = handleBulkCmdBuf(c)
 	assert.Nil(t, err)
 	assert.Equal(t, true, ok)
