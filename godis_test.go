@@ -32,7 +32,7 @@ func TestInlineBuf(t *testing.T) {
 	ReadQuery(c, "val\r\n")
 	ok, err = handleInlineCmdBuf(c)
 	assert.Nil(t, err)
-	assert.Equal(t, false, ok)
+	assert.Equal(t, true, ok)
 
 	assert.Equal(t, 3, len(c.args))
 
