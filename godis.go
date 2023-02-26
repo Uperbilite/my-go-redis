@@ -292,7 +292,6 @@ func CreateClient(fd int) *RedisClient {
 	c.db = server.db
 	c.queryBuf = make([]byte, REDIS_IOBUF_LEN, REDIS_IOBUF_LEN)
 	c.reply = ListCreate(ListType{EqualFunc: RedisStrEqual})
-	server.aeLoop.AeCreateFileEvent(fd, AE_READABLE, ReadQueryFromClient, nil)
 	return &c
 }
 
@@ -330,7 +329,8 @@ func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
 	}
 	c := CreateClient(cfd)
 	// TODO: check max clients limit
-	server.clients[fd] = c
+	server.clients[cfd] = c
+	server.aeLoop.AeCreateFileEvent(cfd, AE_READABLE, ReadQueryFromClient, nil)
 }
 
 const EXPIRE_CHECK_COUNT int = 100
