@@ -72,11 +72,24 @@ func TestBulkCmdBuf(t *testing.T) {
 }
 
 func TestProcessQueryBuf(t *testing.T) {
-	c := CreateClient(0)
+	conf, _ := LoadConfig("config.json")
+	initServer(conf)
+	c := CreateClient(server.fd)
 	ReadQuery(c, "set key val\r\n")
 	err := processQueryBuf(c)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(c.args))
+
+	key := CreateObject(REDISSTR, "key")
+	val := server.db.data.DictGet(key)
+	assert.Equal(t, "val", val.StrVal())
+
+	ReadQuery(c, "set key val2\r\n")
+	err = processQueryBuf(c)
+	assert.Nil(t, err)
+	assert.Equal(t, 3, len(c.args))
+	val2 := server.db.data.DictGet(key)
+	assert.Equal(t, "val2", val2.StrVal())
 
 	ReadQuery(c, "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$3\r\nval\r\n")
 	err = processQueryBuf(c)

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
 	"os"
@@ -152,15 +153,33 @@ func processCommand(c *RedisClient) {
 	resetClient(c)
 }
 
+func freeArgsAndReply(c *RedisClient) {
+	for _, v := range c.args {
+		v.DecrRefCount()
+	}
+	for c.reply.length != 0 {
+		n := c.reply.head
+		c.reply.ListDelNode(n)
+		n.Val.DecrRefCount()
+	}
+}
+
 func freeClient(c *RedisClient) {
 	// TODO: delete file event
 	// TODO: decrRef reply and args list
 	// TODO: delete from clients
+	freeArgsAndReply(c)
+	delete(server.clients, c.fd)
+	server.aeLoop.AeDeleteFileEvent(c.fd, AE_READABLE)
+	server.aeLoop.AeDeleteFileEvent(c.fd, AE_WRITABLE)
+	unix.Close(c.fd)
 }
 
 func resetClient(c *RedisClient) {
+	freeArgsAndReply(c)
 	c.cmdType = REDIS_CMD_UNKNOWN
-
+	c.bulkNum = 0
+	c.bulkLen = 0
 }
 
 func (client *RedisClient) findLineInQuery() (int, error) {
