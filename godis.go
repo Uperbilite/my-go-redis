@@ -28,14 +28,13 @@ type RedisServer struct {
 type RedisClient struct {
 	fd       int
 	db       *RedisDB
-	query    string
-	args     []*RedisObj // get args from query string
+	args     []*RedisObj
 	reply    *List
 	sentLen  int
 	queryBuf []byte // unhandled query content
 	queryLen int    // unhandled query content len
 	cmdType  CmdType
-	bulkNum  int // number of bulk strings
+	bulkNum  int // number of string in multi bulk command
 	bulkLen  int // len of each bulk string
 }
 
@@ -401,7 +400,7 @@ func CreateClient(fd int) *RedisClient {
 	c.fd = fd
 	c.db = server.db
 	c.queryBuf = make([]byte, REDIS_IOBUF_LEN, REDIS_IOBUF_LEN)
-	c.reply = ListCreate(ListType{EqualFunc: RedisStrEqual})
+	c.reply = ListCreate(ListFunc{EqualFunc: RedisStrEqual})
 	return &c
 }
 
