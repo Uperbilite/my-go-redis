@@ -300,34 +300,41 @@ func (dict *Dict) DictGetRandomKey() *DictEntry {
 	if dict.HashTable[0] == nil {
 		return nil
 	}
-	t := 0
+
 	if dict.DictIsRehashing() {
 		dict.DictRehashStep()
-		if dict.HashTable[1] != nil && dict.HashTable[1].used > dict.HashTable[0].used {
-			t = 1
-			// TODO: modify
+	}
+
+	// get random hash entry.
+	var he *DictEntry
+	if dict.DictIsRehashing() {
+		for he == nil {
+			h := rand.Int63n(dict.HashTable[0].size + dict.HashTable[1].size)
+			if h >= dict.HashTable[0].size {
+				he = dict.HashTable[1].table[h-dict.HashTable[0].size]
+			} else {
+				he = dict.HashTable[0].table[h]
+			}
 		}
-	}
-	idx := rand.Int63n(dict.HashTable[t].size)
-	cnt := 0
-	for dict.HashTable[t].table[idx] == nil && cnt < 1000 {
-		idx = rand.Int63n(dict.HashTable[t].size)
-		cnt += 1
-	}
-	if dict.HashTable[t].table[idx] == nil {
-		return nil
+	} else {
+		for he == nil {
+			h := rand.Int63n(dict.HashTable[0].size)
+			he = dict.HashTable[0].table[h]
+		}
 	}
 
 	var listLen int64
-	p := dict.HashTable[t].table[idx]
-	for p != nil {
+	origHe := he
+	for he != nil {
+		he = he.next
 		listLen += 1
-		p = p.next
 	}
 	listIdx := rand.Int63n(listLen)
-	p = dict.HashTable[t].table[idx]
-	for i := int64(0); i < listIdx; i++ {
-		p = p.next
+	he = origHe
+	for listIdx > 0 {
+		he = he.next
+		listIdx -= 1
 	}
-	return p
+
+	return he
 }
