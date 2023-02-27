@@ -6,7 +6,7 @@ import (
 )
 
 func TestList(t *testing.T) {
-	l := ListCreate(ListType{EqualFunc: RedisStrEqual})
+	l := ListCreate(ListFunc{EqualFunc: RedisStrEqual})
 	assert.Equal(t, 0, l.ListLength())
 
 	l.ListAddNodeTail(CreateObject(REDISSTR, "4"))
@@ -36,8 +36,7 @@ func TestList(t *testing.T) {
 
 	l.ListDelKey(o1)
 	assert.Equal(t, 4, l.ListLength())
-	n3 := l.ListSearchKey(o1)
-	assert.Nil(t, n3)
+	assert.Nil(t, l.ListSearchKey(o1))
 
 	l.ListDelNode(l.ListFirst())
 	assert.Equal(t, 3, l.ListLength())

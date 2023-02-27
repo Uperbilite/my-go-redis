@@ -6,20 +6,20 @@ type ListNode struct {
 	prev *ListNode
 }
 
-type ListType struct {
+type ListFunc struct {
 	EqualFunc func(a, b *RedisObj) bool
 }
 
 type List struct {
-	ListType
+	ListFunc
 	head   *ListNode
 	tail   *ListNode
 	length int
 }
 
-func ListCreate(listType ListType) *List {
+func ListCreate(listFunc ListFunc) *List {
 	var list List
-	list.ListType = listType
+	list.ListFunc = listFunc
 	return &list
 }
 
@@ -49,7 +49,7 @@ func (list *List) ListSearchKey(val *RedisObj) *ListNode {
 func (list *List) ListAddNodeHead(val *RedisObj) {
 	var node ListNode
 	node.Val = val
-	if list.head == nil {
+	if list.length == 0 {
 		list.head = &node
 		list.tail = &node
 	} else {
@@ -63,7 +63,7 @@ func (list *List) ListAddNodeHead(val *RedisObj) {
 func (list *List) ListAddNodeTail(val *RedisObj) {
 	var node ListNode
 	node.Val = val
-	if list.head == nil {
+	if list.length == 0 {
 		list.head = &node
 		list.tail = &node
 	} else {
@@ -76,6 +76,7 @@ func (list *List) ListAddNodeTail(val *RedisObj) {
 
 func (list *List) ListDelKey(val *RedisObj) {
 	p := list.ListSearchKey(val)
+
 	if list.head == p {
 		if p.next != nil {
 			p.next.prev = nil
@@ -83,6 +84,7 @@ func (list *List) ListDelKey(val *RedisObj) {
 		list.head = p.next
 		p.next = nil
 	}
+
 	if list.tail == p {
 		if p.prev != nil {
 			p.prev.next = nil
@@ -90,6 +92,7 @@ func (list *List) ListDelKey(val *RedisObj) {
 		list.tail = p.prev
 		p.prev = nil
 	}
+
 	if p.prev != nil {
 		p.prev.next = p.next
 	}
@@ -98,6 +101,7 @@ func (list *List) ListDelKey(val *RedisObj) {
 	}
 	p.next = nil
 	p.prev = nil
+
 	list.length -= 1
 }
 
