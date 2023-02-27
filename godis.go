@@ -107,7 +107,7 @@ func setCommand(c *RedisClient) {
 	if val.Type_ != REDISSTR {
 		c.AddReplyStr("-ERR: wrong type\r\n")
 	}
-	server.db.data.Set(key, val)
+	server.db.data.DictSet(key, val)
 	server.db.expire.DictDelete(key)
 	c.AddReplyStr("+OK\r\n")
 }
@@ -121,7 +121,7 @@ func expireCommand(c *RedisClient) {
 	}
 	expire := GetMsTime() + (val.IntVal() * 1000)
 	expObj := CreateFromInt(expire)
-	server.db.expire.Set(key, expObj)
+	server.db.expire.DictSet(key, expObj)
 	expObj.DecrRefCount()
 	c.AddReplyStr("+OK\r\n")
 }
@@ -409,13 +409,13 @@ func initServer(config *Config) error {
 	server.addr = config.Addr
 	server.clients = make(map[int]*RedisClient)
 	server.db = &RedisDB{
-		data: DictCreate(DictType{
-			HashFunction: RedisStrHash,
-			KeyCompare:   RedisStrEqual,
+		data: DictCreate(DictFunc{
+			HashFunc:  RedisStrHash,
+			EqualFunc: RedisStrEqual,
 		}),
-		expire: DictCreate(DictType{
-			HashFunction: RedisStrHash,
-			KeyCompare:   RedisStrEqual,
+		expire: DictCreate(DictFunc{
+			HashFunc:  RedisStrHash,
+			EqualFunc: RedisStrEqual,
 		}),
 	}
 

@@ -7,9 +7,9 @@ import (
 )
 
 func TestDict(t *testing.T) {
-	d := DictCreate(DictType{
-		HashFunction: RedisStrHash,
-		KeyCompare:   RedisStrEqual,
+	d := DictCreate(DictFunc{
+		HashFunc:  RedisStrHash,
+		EqualFunc: RedisStrEqual,
 	})
 
 	entry := d.DictGetRandomKey()
@@ -45,7 +45,7 @@ func TestDict(t *testing.T) {
 
 	k2 := CreateObject(REDISSTR, "k2")
 	v2 := CreateObject(REDISSTR, "v2")
-	d.Set(k2, v2)
+	d.DictSet(k2, v2)
 	assert.Equal(t, 2, k2.refcount)
 	assert.Equal(t, 2, v2.refcount)
 
@@ -54,7 +54,7 @@ func TestDict(t *testing.T) {
 	assert.Equal(t, k2, entry.Key)
 	assert.Equal(t, v2, entry.Val)
 
-	d.Set(k2, v1)
+	d.DictSet(k2, v1)
 	assert.Equal(t, 2, v1.refcount)
 	assert.Equal(t, 1, v2.refcount)
 
@@ -64,9 +64,9 @@ func TestDict(t *testing.T) {
 }
 
 func TestRehash(t *testing.T) {
-	d := DictCreate(DictType{
-		HashFunction: RedisStrHash,
-		KeyCompare:   RedisStrEqual,
+	d := DictCreate(DictFunc{
+		HashFunc:  RedisStrHash,
+		EqualFunc: RedisStrEqual,
 	})
 	entry := d.DictGetRandomKey()
 	assert.Nil(t, entry)
@@ -85,7 +85,7 @@ func TestRehash(t *testing.T) {
 	err := d.DictAdd(key, val)
 	assert.Nil(t, err)
 	assert.Equal(t, true, d.DictIsRehashing())
-	assert.Equal(t, int64(0), d.rehashidx)
+	assert.Equal(t, int64(0), d.rehashIdx)
 	assert.Equal(t, DICT_HT_INITIAL_SIZE, d.HashTable[0].size)
 	assert.Equal(t, DICT_HT_INITIAL_SIZE*DICT_HT_GROW_RATIO, d.HashTable[1].size)
 

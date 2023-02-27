@@ -8,7 +8,7 @@ import (
 
 const (
 	DICT_HT_INITIAL_SIZE     int64 = 8
-	DICT_FORCE_RESIZE_RATIO  int64 = 2
+	DICT_FORCE_RESIZE_RATIO  int64 = 2 // only elements / buckets > 2 can hash table expand.
 	DICT_HT_GROW_RATIO       int64 = 2
 	DICT_DEFAULT_REHASH_STEP int64 = 1
 )
@@ -32,49 +32,54 @@ type DictHashTable struct {
 	used  int64
 }
 
-type DictType struct {
-	HashFunction func(key *RedisObj) int64
-	KeyCompare   func(key1, key2 *RedisObj) bool
+type DictFunc struct {
+	HashFunc  func(key *RedisObj) int64
+	EqualFunc func(key1, key2 *RedisObj) bool
 }
 
 type Dict struct {
-	DictType
+	DictFunc
 	HashTable [2]*DictHashTable
-	rehashidx int64
+	rehashIdx int64
+	// TODO: impl iterator
 }
 
-func DictCreate(dictType DictType) *Dict {
+func DictCreate(dictFunc DictFunc) *Dict {
 	var dict Dict
-	dict.DictType = dictType
-	dict.rehashidx = -1
+	dict.DictFunc = dictFunc
+	dict.rehashIdx = -1
 	return &dict
 }
 
 func (dict *Dict) DictIsRehashing() bool {
-	return dict.rehashidx != -1
+	return dict.rehashIdx != -1
 }
 
 func (dict *Dict) DictRehash(step int64) {
+	if dict.DictIsRehashing() == false {
+		return
+	}
+
 	for step > 0 {
 		// exchange hash table if rehash is completed.
 		if dict.HashTable[0].used == 0 {
 			dict.HashTable[0] = dict.HashTable[1]
 			dict.HashTable[1] = nil
-			dict.rehashidx = -1
+			dict.rehashIdx = -1
 			return
 		}
 
 		// find a not null head entry.
-		for dict.HashTable[0].table[dict.rehashidx] == nil {
-			dict.rehashidx += 1
+		for dict.HashTable[0].table[dict.rehashIdx] == nil {
+			dict.rehashIdx += 1
 		}
 
-		// hash all the entry behind head entry, including head entry.
+		// rehash all the entry behind the head entry, including head entry.
 		var de, nextDe *DictEntry
-		de = dict.HashTable[0].table[dict.rehashidx]
+		de = dict.HashTable[0].table[dict.rehashIdx]
 		for de != nil {
 			nextDe = de.next
-			h := dict.HashFunction(de.Key) & dict.HashTable[1].mask
+			h := dict.HashFunc(de.Key) & dict.HashTable[1].mask
 			de.next = dict.HashTable[1].table[h]
 			dict.HashTable[1].table[h] = de
 			dict.HashTable[1].used += 1
@@ -82,8 +87,8 @@ func (dict *Dict) DictRehash(step int64) {
 			de = nextDe
 		}
 
-		dict.HashTable[0].table[dict.rehashidx] = nil
-		dict.rehashidx += 1
+		dict.HashTable[0].table[dict.rehashIdx] = nil
+		dict.rehashIdx += 1
 		step -= 1
 	}
 }
@@ -104,11 +109,11 @@ func dictNextPower(size int64) int64 {
 
 func (dict *Dict) DictExpand(size int64) error {
 	realSize := dictNextPower(size)
-	if dict.DictIsRehashing() || (dict.HashTable[0] != nil && dict.HashTable[0].size >= realSize) {
+	if dict.DictIsRehashing() || (dict.HashTable[0] != nil && dict.HashTable[0].used > size) {
 		return EP_ERR
 	}
 
-	var n DictHashTable
+	var n DictHashTable // the new hash table
 	n.size = realSize
 	n.mask = realSize - 1
 	n.table = make([]*DictEntry, realSize)
@@ -120,9 +125,9 @@ func (dict *Dict) DictExpand(size int64) error {
 		return nil
 	}
 
-	// expanded hash table.
+	// expand hash table and start rehashing.
 	dict.HashTable[1] = &n
-	dict.rehashidx = 0
+	dict.rehashIdx = 0
 	return nil
 }
 
@@ -130,6 +135,7 @@ func (dict *Dict) dictExpandIfNeeded() error {
 	if dict.DictIsRehashing() {
 		return nil
 	}
+	// hash table is empty and expand it to initial size.
 	if dict.HashTable[0] == nil {
 		return dict.DictExpand(DICT_HT_INITIAL_SIZE)
 	}
@@ -139,23 +145,31 @@ func (dict *Dict) dictExpandIfNeeded() error {
 	return nil
 }
 
+/*
+	DictKeyIndex return the index in hash table that the key can
+	be inserted into, if the key is already exist, return -1.
+*/
 func (dict *Dict) DictKeyIndex(key *RedisObj) int64 {
 	err := dict.dictExpandIfNeeded()
 	if err != nil {
 		return -1
 	}
-	h := dict.HashFunction(key)
+	h := dict.HashFunc(key)
 	var idx int64
 	for i := 0; i <= 1; i++ {
 		idx = h & dict.HashTable[i].mask
 		he := dict.HashTable[i].table[idx]
 		for he != nil {
-			if dict.KeyCompare(he.Key, key) {
+			if dict.EqualFunc(he.Key, key) {
 				return -1
 			}
 			he = he.next
 		}
 		if !dict.DictIsRehashing() {
+			/*
+				if it's in the process of rehashing,
+				the index should be in HashTable[1].
+			*/
 			break
 		}
 	}
@@ -185,9 +199,36 @@ func (dict *Dict) DictAddRaw(key *RedisObj) *DictEntry {
 	e.next = ht.table[idx]
 	ht.table[idx] = &e
 	ht.used += 1
+
 	return &e
 }
 
+func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
+	if dict.HashTable[0] == nil {
+		return nil
+	}
+	if dict.DictIsRehashing() {
+		dict.DictRehashStep()
+	}
+	h := dict.HashFunc(key)
+	for i := 0; i <= 1; i++ {
+		idx := h & dict.HashTable[i].mask
+		he := dict.HashTable[i].table[idx]
+		for he != nil {
+			if dict.EqualFunc(he.Key, key) {
+				return he
+			}
+			he = he.next
+		}
+		if !dict.DictIsRehashing() {
+			// if rehashing, then find key in two hash tables.
+			break
+		}
+	}
+	return nil
+}
+
+// DictAdd add a new kv pair, return err if key exists.
 func (dict *Dict) DictAdd(key, val *RedisObj) error {
 	entry := dict.DictAddRaw(key)
 	if entry == nil {
@@ -198,31 +239,8 @@ func (dict *Dict) DictAdd(key, val *RedisObj) error {
 	return nil
 }
 
-func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
-	if dict.HashTable[0] == nil {
-		return nil
-	}
-	if dict.DictIsRehashing() {
-		dict.DictRehashStep()
-	}
-	h := dict.HashFunction(key)
-	for i := 0; i <= 1; i++ {
-		idx := h & dict.HashTable[i].mask
-		e := dict.HashTable[i].table[idx]
-		for e != nil {
-			if dict.KeyCompare(e.Key, key) {
-				return e
-			}
-			e = e.next
-		}
-		if !dict.DictIsRehashing() {
-			break
-		}
-	}
-	return nil
-}
-
-func (dict *Dict) Set(key, val *RedisObj) {
+// DictSet add a new kv pair, or update the exists pair.
+func (dict *Dict) DictSet(key, val *RedisObj) {
 	if err := dict.DictAdd(key, val); err == nil {
 		return
 	}
@@ -244,19 +262,20 @@ func (dict *Dict) DictDelete(key *RedisObj) error {
 	if dict.DictIsRehashing() {
 		dict.DictRehashStep()
 	}
-	h := dict.HashFunction(key)
+	h := dict.HashFunc(key)
 	for i := 0; i <= 1; i++ {
 		idx := h & dict.HashTable[i].mask
 		he := dict.HashTable[i].table[idx]
 		var prevHe *DictEntry
 		for he != nil {
-			if dict.KeyCompare(he.Key, key) {
+			if dict.EqualFunc(he.Key, key) {
 				if prevHe == nil {
 					dict.HashTable[i].table[idx] = he.next
 				} else {
 					prevHe.next = he.next
 				}
 				freeEntry(he)
+				dict.HashTable[i].used -= 1
 				return nil
 			}
 			prevHe = he
@@ -286,6 +305,7 @@ func (dict *Dict) DictGetRandomKey() *DictEntry {
 		dict.DictRehashStep()
 		if dict.HashTable[1] != nil && dict.HashTable[1].used > dict.HashTable[0].used {
 			t = 1
+			// TODO: modify
 		}
 	}
 	idx := rand.Int63n(dict.HashTable[t].size)
