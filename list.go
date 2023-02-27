@@ -77,22 +77,32 @@ func (list *List) ListAddNodeTail(val *RedisObj) {
 func (list *List) ListDelKey(val *RedisObj) {
 	p := list.ListSearchKey(val)
 	if list.head == p {
-		p.next.prev = nil
+		if p.next != nil {
+			p.next.prev = nil
+		}
 		list.head = p.next
 		p.next = nil
-	} else if list.tail == p {
-		p.prev.next = nil
+	}
+	if list.tail == p {
+		if p.prev != nil {
+			p.prev.next = nil
+		}
 		list.tail = p.prev
 		p.prev = nil
-	} else {
-		p.prev.next = p.next
-		p.next.prev = p.prev
-		p.next = nil
-		p.prev = nil
 	}
+	if p.prev != nil {
+		p.prev.next = p.next
+	}
+	if p.next != nil {
+		p.next.prev = p.prev
+	}
+	p.next = nil
+	p.prev = nil
 	list.length -= 1
 }
 
 func (list *List) ListDelNode(n *ListNode) {
-	list.ListDelKey(n.Val)
+	if n != nil {
+		list.ListDelKey(n.Val)
+	}
 }
