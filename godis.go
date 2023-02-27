@@ -65,6 +65,8 @@ var server RedisServer
 var cmdTable []RedisCommand = []RedisCommand{
 	{"get", getCommand, 2},
 	{"set", setCommand, 3},
+	{"expire", expireCommand, 3},
+	// TODO: more command
 }
 
 func expireIfNeeded(key *RedisObj) {
@@ -73,7 +75,7 @@ func expireIfNeeded(key *RedisObj) {
 		return
 	}
 	when := entry.Val.IntVal()
-	if when < GetMsTime() {
+	if when > GetMsTime() {
 		return
 	}
 	server.db.expire.DictDelete(key)
@@ -111,6 +113,20 @@ func setCommand(c *RedisClient) {
 	c.AddReplyStr("+OK\r\n")
 }
 
+func expireCommand(c *RedisClient) {
+	key := c.args[1]
+	val := c.args[2]
+	if val.Type_ != REDISSTR {
+		// TODO: extract shared.strings
+		c.AddReplyStr("-ERR: wrong type\r\n")
+	}
+	expire := GetMsTime() + (val.IntVal() * 1000)
+	expObj := CreateFromInt(expire)
+	server.db.expire.Set(key, expObj)
+	expObj.DecrRefCount()
+	c.AddReplyStr("+OK\r\n")
+}
+
 func lookupCommand(cmdName string) *RedisCommand {
 	for _, c := range cmdTable {
 		if c.name == cmdName {
@@ -134,6 +150,7 @@ func (c *RedisClient) AddReplyStr(str string) {
 
 func processCommand(c *RedisClient) {
 	cmdName := c.args[0].StrVal()
+	log.Printf("process command: %v\n", cmdName)
 	if cmdName == "quit" {
 		freeClient(c)
 		return
@@ -152,10 +169,13 @@ func processCommand(c *RedisClient) {
 	resetClient(c)
 }
 
-func freeArgsAndReply(c *RedisClient) {
+func freeArgs(c *RedisClient) {
 	for _, v := range c.args {
 		v.DecrRefCount()
 	}
+}
+
+func freeReplyList(c *RedisClient) {
 	for c.reply.length != 0 {
 		n := c.reply.head
 		c.reply.ListDelNode(n)
@@ -164,18 +184,16 @@ func freeArgsAndReply(c *RedisClient) {
 }
 
 func freeClient(c *RedisClient) {
-	// TODO: delete file event
-	// TODO: decrRef reply and args list
-	// TODO: delete from clients
-	freeArgsAndReply(c)
+	freeArgs(c)
 	delete(server.clients, c.fd)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_READABLE)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_WRITABLE)
+	freeReplyList(c)
 	Close(c.fd)
 }
 
 func resetClient(c *RedisClient) {
-	freeArgsAndReply(c)
+	freeArgs(c)
 	c.cmdType = REDIS_CMD_UNKNOWN
 	c.bulkNum = 0
 	c.bulkLen = 0
@@ -310,9 +328,6 @@ func processQueryBuf(c *RedisClient) error {
 }
 
 func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
-	// TODO: read query from client
-	// TODO: trans query -> args
-	// TODO: process command
 	c := client.(*RedisClient)
 	if len(c.queryBuf)-c.queryLen < REDIS_BULK_MAX {
 		c.queryBuf = append(c.queryBuf, make([]byte, REDIS_BULK_MAX, REDIS_BULK_MAX)...)
@@ -324,6 +339,8 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 		return
 	}
 	c.queryLen += n
+	log.Printf("read %v bytes from client: %v\n", n, c.fd)
+	log.Printf("ReadQueryFromClient, queryBuf: %v\n", string(c.queryBuf))
 	err = processQueryBuf(c)
 	if err != nil {
 		log.Printf("handle query buf err: %v\n", err)
@@ -334,6 +351,7 @@ func ReadQueryFromClient(el *AeEventLoop, fd int, client interface{}) {
 
 func SendReplyToClient(el *AeEventLoop, fd int, client interface{}) {
 	c := client.(*RedisClient)
+	log.Printf("SendReplyToClient, reply len: %v\n", c.reply.ListLength())
 	for c.reply.ListLength() > 0 {
 		rep := c.reply.ListFirst()
 		buf := []byte(rep.Val.StrVal())
@@ -346,6 +364,7 @@ func SendReplyToClient(el *AeEventLoop, fd int, client interface{}) {
 				return
 			}
 			c.sentLen += n
+			log.Printf("send %v bytes to client: %v\n", n, c.fd)
 			if c.sentLen == bufLen {
 				c.reply.ListDelNode(rep)
 				rep.Val.DecrRefCount()
@@ -422,6 +441,7 @@ func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
 	// TODO: check max clients limit
 	server.clients[cfd] = c
 	server.aeLoop.AeCreateFileEvent(cfd, AE_READABLE, ReadQueryFromClient, c)
+	log.Printf("accept client, fd: %v\n", cfd)
 }
 
 const EXPIRE_CHECK_COUNT int = 100
@@ -430,7 +450,7 @@ const EXPIRE_CHECK_COUNT int = 100
 func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 	for i := 0; i < EXPIRE_CHECK_COUNT; i++ {
 		entry := server.db.expire.DictGetRandomKey()
-		if entry.Key == nil {
+		if entry == nil {
 			break
 		}
 		if entry.Val.IntVal() < time.Now().Unix() {

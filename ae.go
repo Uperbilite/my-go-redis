@@ -90,8 +90,11 @@ func AeCreateEventLoop() (*AeEventLoop, error) {
 // AeCreateFileEvent Create a file event and insert into the head of file event list.
 func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFileProc, clientData interface{}) {
 	// epoll ctl
-	op := unix.EPOLL_CTL_ADD
 	ev := eventLoop.getEpollMask(fd)
+	if ev&fe2ep[mask] != 0 {
+		return
+	}
+	op := unix.EPOLL_CTL_ADD
 	if ev != 0 {
 		op = unix.EPOLL_CTL_MOD
 	}
@@ -113,6 +116,7 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFile
 	fe.fileProc = proc
 	fe.clientData = clientData
 	eventLoop.FileEvents[getFeKey(fd, mask)] = &fe
+	log.Printf("ae crearte file event fd:%v, mask:%v\n", fd, mask)
 }
 
 // AeDeleteFileEvent Delete file event by iterating file event list.
@@ -141,6 +145,7 @@ func (eventLoop *AeEventLoop) AeDeleteFileEvent(fd int, mask FeType) {
 
 	// ae ctl
 	eventLoop.FileEvents[getFeKey(fd, mask)] = nil
+	log.Printf("ae delete file event fd:%v, mask:%v\n", fd, mask)
 }
 
 // AeCreateTimeEvent Create time event and insert into the head of time event list.
@@ -192,10 +197,11 @@ func (eventLoop *AeEventLoop) AeProcessEvents(tes []*AeTimeEvent, fes []*AeFileE
 			eventLoop.AeDeleteTimeEvent(te.id)
 		}
 	}
-	for _, fe := range fes {
-		fe.fileProc(eventLoop, fe.fd, fe.clientData)
-		// TODO: let client delete file events.
-		eventLoop.AeDeleteFileEvent(fe.fd, fe.mask)
+	if len(fes) > 0 {
+		log.Println("ae is processing file events")
+		for _, fe := range fes {
+			fe.fileProc(eventLoop, fe.fd, fe.clientData)
+		}
 	}
 }
 
@@ -212,7 +218,7 @@ func (eventLoop *AeEventLoop) nearestTime() int64 {
 	return nearest
 }
 
-func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, err error) {
+func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent) {
 	// TODO: error handle
 	timeout := eventLoop.nearestTime() - time.Now().UnixMilli()
 	if timeout <= 0 {
@@ -221,8 +227,10 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 	var epollEvents [128]unix.EpollEvent
 	n, err := unix.EpollWait(eventLoop.epfd, epollEvents[:], int(timeout))
 	if err != nil {
-		log.Printf("epoll wait err: %v\n", err)
-		return
+		log.Printf("epoll wait warning: %v\n", err)
+	}
+	if n > 0 {
+		log.Printf("ae get %v epoll events\n", n)
 	}
 
 	// collect file event which is ready
@@ -257,10 +265,7 @@ func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent, 
 func (eventLoop *AeEventLoop) AeMain() {
 	eventLoop.stop = false
 	for eventLoop.stop != true {
-		tes, fes, err := eventLoop.AeWait()
-		if err != nil {
-			eventLoop.stop = true
-		}
+		tes, fes := eventLoop.AeWait()
 		eventLoop.AeProcessEvents(tes, fes)
 	}
 }

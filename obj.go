@@ -32,10 +32,10 @@ func (o *RedisObj) StrVal() string {
 	return o.Val_.(string)
 }
 
-func CreateFromInt(val int) *RedisObj {
+func CreateFromInt(val int64) *RedisObj {
 	return &RedisObj{
 		Type_:    REDISSTR,
-		Val_:     strconv.Itoa(val),
+		Val_:     strconv.FormatInt(val, 10),
 		refcount: 1,
 	}
 }
