@@ -207,7 +207,7 @@ func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
 	for i := 0; i <= 1; i++ {
 		idx := h & dict.HashTable[i].mask
 		e := dict.HashTable[i].table[idx]
-		if e != nil {
+		for e != nil {
 			if dict.KeyCompare(e.Key, key) {
 				return e
 			}
