@@ -92,6 +92,7 @@ func (eventLoop *AeEventLoop) AeCreateFileEvent(fd int, mask FeType, proc AeFile
 	// epoll ctl
 	ev := eventLoop.getEpollMask(fd)
 	if ev&fe2ep[mask] != 0 {
+		// event is already registered
 		return
 	}
 	op := unix.EPOLL_CTL_ADD
@@ -220,7 +221,7 @@ func (eventLoop *AeEventLoop) nearestTime() int64 {
 
 func (eventLoop *AeEventLoop) AeWait() (tes []*AeTimeEvent, fes []*AeFileEvent) {
 	// TODO: error handle
-	timeout := eventLoop.nearestTime() - time.Now().UnixMilli()
+	timeout := eventLoop.nearestTime() - GetMsTime()
 	if timeout <= 0 {
 		timeout = 10 // at least wait 10ms
 	}
