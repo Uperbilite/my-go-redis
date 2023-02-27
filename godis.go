@@ -89,9 +89,11 @@ func getCommand(c *RedisClient) {
 	key := c.args[1]
 	val := lookupKeyRead(key)
 	if val == nil {
+		// TODO: extract shared.strings
 		c.AddReplyStr("$-1\r\n")
 	} else if val.Type_ != REDISSTR {
-		c.AddReplyStr("-ERR: wrong type")
+		// TODO: extract shared.strings
+		c.AddReplyStr("-ERR: wrong type\r\n")
 	} else {
 		str := val.StrVal()
 		c.AddReplyStr(fmt.Sprintf("$%d%v\t\n", len(str), str))
@@ -99,7 +101,14 @@ func getCommand(c *RedisClient) {
 }
 
 func setCommand(c *RedisClient) {
-	// TODO
+	key := c.args[1]
+	val := c.args[2]
+	if val.Type_ != REDISSTR {
+		c.AddReplyStr("-ERR: wrong type\r\n")
+	}
+	server.db.data.Set(key, val)
+	server.db.expire.DictDelete(key)
+	c.AddReplyStr("+OK\r\n")
 }
 
 func lookupCommand(cmdName string) *RedisCommand {
@@ -131,11 +140,11 @@ func processCommand(c *RedisClient) {
 	}
 	cmd := lookupCommand(cmdName)
 	if cmd == nil {
-		c.AddReplyStr("-ERR: unknown command")
+		c.AddReplyStr("-ERR: unknown command\r\n")
 		resetClient(c)
 		return
 	} else if cmd.arity != len(c.args) {
-		c.AddReplyStr("-ERR: wrong number of args")
+		c.AddReplyStr("-ERR: wrong number of args\r\n")
 		resetClient(c)
 		return
 	}
