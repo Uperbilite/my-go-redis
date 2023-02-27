@@ -17,11 +17,11 @@ type RedisObj struct {
 	refcount int
 }
 
-func (o *RedisObj) IntVal() int {
+func (o *RedisObj) IntVal() int64 {
 	if o.Type_ != REDISSTR {
 		return 0
 	}
-	val, _ := strconv.Atoi(o.Val_.(string))
+	val, _ := strconv.ParseInt(o.Val_.(string), 10, 64)
 	return val
 }
 

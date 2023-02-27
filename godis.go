@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"log"
 	"os"
@@ -66,8 +67,35 @@ var cmdTable []RedisCommand = []RedisCommand{
 	{"set", setCommand, 3},
 }
 
+func expireIfNeeded(key *RedisObj) {
+	entry := server.db.expire.DictFind(key)
+	if entry == nil {
+		return
+	}
+	when := entry.Val.IntVal()
+	if when < GetMsTime() {
+		return
+	}
+	server.db.expire.DictDelete(key)
+	server.db.data.DictDelete(key)
+}
+
+func lookupKeyRead(key *RedisObj) *RedisObj {
+	expireIfNeeded(key)
+	return server.db.data.DictGet(key)
+}
+
 func getCommand(c *RedisClient) {
-	// TODO
+	key := c.args[1]
+	val := lookupKeyRead(key)
+	if val == nil {
+		c.AddReplyStr("$-1\r\n")
+	} else if val.Type_ != REDISSTR {
+		c.AddReplyStr("-ERR: wrong type")
+	} else {
+		str := val.StrVal()
+		c.AddReplyStr(fmt.Sprintf("$%d%v\t\n", len(str), str))
+	}
 }
 
 func setCommand(c *RedisClient) {
@@ -378,7 +406,7 @@ func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 		if entry.Key == nil {
 			break
 		}
-		if int64(entry.Val.IntVal()) < time.Now().Unix() {
+		if entry.Val.IntVal() < time.Now().Unix() {
 			server.db.data.DictDelete(entry.Key)
 			server.db.expire.DictDelete(entry.Key)
 		}
