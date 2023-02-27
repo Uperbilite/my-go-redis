@@ -19,8 +19,6 @@ func TestDict(t *testing.T) {
 	v1 := CreateObject(REDISSTR, "v1")
 	err := d.DictAdd(k1, v1)
 	assert.Nil(t, err)
-	k1.IncrRefCount()
-	v1.IncrRefCount()
 	assert.Equal(t, 2, k1.refcount)
 	assert.Equal(t, 2, v1.refcount)
 

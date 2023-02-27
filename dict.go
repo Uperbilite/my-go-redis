@@ -181,6 +181,7 @@ func (dict *Dict) DictAddRaw(key *RedisObj) *DictEntry {
 
 	var e DictEntry
 	e.Key = key
+	e.Key.IncrRefCount()
 	e.next = ht.table[idx]
 	ht.table[idx] = &e
 	ht.used += 1
@@ -193,6 +194,7 @@ func (dict *Dict) DictAdd(key, val *RedisObj) error {
 		return EX_ERR
 	}
 	entry.Val = val
+	entry.Val.IncrRefCount()
 	return nil
 }
 
