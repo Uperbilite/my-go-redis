@@ -74,11 +74,44 @@ func setCommand(c *RedisClient) {
 	// TODO
 }
 
+func lookupCommand(cmdName string) *RedisCommand {
+	for _, c := range cmdTable {
+		if c.name == cmdName {
+			return &c
+		}
+	}
+	return nil
+}
+
+func (c *RedisClient) AddReply(obj *RedisObj) {
+	c.reply.ListAddNodeTail(obj)
+	obj.IncrRefCount()
+	server.aeLoop.AeCreateFileEvent(c.fd, AE_WRITABLE, SendReplyToClient, c)
+}
+
+func (c *RedisClient) AddReplyStr(str string) {
+	obj := CreateObject(REDISSTR, str)
+	c.AddReply(obj)
+	obj.DecrRefCount()
+}
+
 func processCommand(c *RedisClient) {
-	// TODO: lookup command
-	// TODO: call command
-	// TODO: decrRef args
-	// resetClient for testcase
+	cmdName := c.args[0].StrVal()
+	if cmdName == "quit" {
+		freeClient(c)
+		return
+	}
+	cmd := lookupCommand(cmdName)
+	if cmd == nil {
+		c.AddReplyStr("-ERR: unknown command")
+		resetClient(c)
+		return
+	} else if cmd.arity != len(c.args) {
+		c.AddReplyStr("-ERR: wrong number of args")
+		resetClient(c)
+		return
+	}
+	cmd.proc(c)
 	resetClient(c)
 }
 
