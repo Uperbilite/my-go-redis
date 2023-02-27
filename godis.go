@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type RedisDB struct {
@@ -71,10 +70,12 @@ var cmdTable []RedisCommand = []RedisCommand{
 func expireIfNeeded(key *RedisObj) {
 	entry := server.db.expire.DictFind(key)
 	if entry == nil {
+		// no expire for this key.
 		return
 	}
 	when := entry.Val.IntVal()
 	if when > GetMsTime() {
+		// return if the key has not expired.
 		return
 	}
 	server.db.expire.DictDelete(key)
@@ -168,7 +169,7 @@ func processCommand(c *RedisClient) {
 	resetClient(c)
 }
 
-func freeArgs(c *RedisClient) {
+func freeClientArgs(c *RedisClient) {
 	for _, v := range c.args {
 		v.DecrRefCount()
 	}
@@ -183,34 +184,34 @@ func freeReplyList(c *RedisClient) {
 }
 
 func freeClient(c *RedisClient) {
-	freeArgs(c)
+	freeClientArgs(c)
+	freeReplyList(c)
 	delete(server.clients, c.fd)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_READABLE)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_WRITABLE)
-	freeReplyList(c)
 	Close(c.fd)
 }
 
 func resetClient(c *RedisClient) {
-	freeArgs(c)
+	freeClientArgs(c)
 	c.cmdType = REDIS_CMD_UNKNOWN
 	c.bulkNum = 0
 	c.bulkLen = 0
 }
 
-func (client *RedisClient) findLineInQuery() (int, error) {
-	index := strings.Index(string(client.queryBuf[:client.queryLen]), "\r\n")
-	if index < 0 && client.queryLen > REDIS_INLINE_MAX {
+func (c *RedisClient) findLineInQuery() (int, error) {
+	index := strings.Index(string(c.queryBuf[:c.queryLen]), "\r\n")
+	if index < 0 && c.queryLen > REDIS_INLINE_MAX {
 		return index, errors.New("too big inline cmd")
 	}
 	return index, nil
 }
 
 // getBulkNumInQuery get number in bulk string, "*3\r\n..." or "$3\r\n..." will return 3.
-func (client *RedisClient) getBulkNumInQuery(start, end int) (int, error) {
-	num, err := strconv.Atoi(string(client.queryBuf[start:end]))
-	client.queryBuf = client.queryBuf[end+2:]
-	client.queryLen -= end + 2
+func (c *RedisClient) getBulkNumInQuery(start, end int) (int, error) {
+	num, err := strconv.Atoi(string(c.queryBuf[start:end]))
+	c.queryBuf = c.queryBuf[end+2:]
+	c.queryLen -= end + 2
 	return num, err
 }
 
@@ -452,7 +453,7 @@ func ServerCron(loop *AeEventLoop, id int, extra interface{}) {
 		if entry == nil {
 			break
 		}
-		if entry.Val.IntVal() < time.Now().Unix() {
+		if entry.Val.IntVal() < GetMsTime() {
 			server.db.data.DictDelete(entry.Key)
 			server.db.expire.DictDelete(entry.Key)
 		}
