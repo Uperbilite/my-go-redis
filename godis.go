@@ -422,7 +422,7 @@ func AcceptHandler(le *AeEventLoop, fd int, extra interface{}) {
 	c := CreateClient(cfd)
 	// TODO: check max clients limit
 	server.clients[cfd] = c
-	server.aeLoop.AeCreateFileEvent(cfd, AE_READABLE, ReadQueryFromClient, nil)
+	server.aeLoop.AeCreateFileEvent(cfd, AE_READABLE, ReadQueryFromClient, c)
 }
 
 const EXPIRE_CHECK_COUNT int = 100
