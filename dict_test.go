@@ -17,14 +17,24 @@ func TestDict(t *testing.T) {
 
 	k1 := CreateObject(REDISSTR, "k1")
 	v1 := CreateObject(REDISSTR, "v1")
+
 	err := d.DictAdd(k1, v1)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, k1.refcount)
 	assert.Equal(t, 2, v1.refcount)
 
 	entry = d.DictFind(k1)
+	assert.NotNil(t, entry)
 	assert.Equal(t, k1, entry.Key)
 	assert.Equal(t, v1, entry.Val)
+	assert.Equal(t, 2, k1.refcount)
+	assert.Equal(t, 2, v1.refcount)
+
+	val := d.DictGet(k1)
+	assert.NotNil(t, val)
+	assert.Equal(t, v1, val)
+	assert.Equal(t, 2, k1.refcount)
+	assert.Equal(t, 2, v1.refcount)
 
 	err = d.DictDelete(k1)
 	assert.Nil(t, err)
@@ -32,6 +42,25 @@ func TestDict(t *testing.T) {
 	assert.Nil(t, entry)
 	assert.Equal(t, 1, k1.refcount)
 	assert.Equal(t, 1, v1.refcount)
+
+	k2 := CreateObject(REDISSTR, "k2")
+	v2 := CreateObject(REDISSTR, "v2")
+	d.Set(k2, v2)
+	assert.Equal(t, 2, k2.refcount)
+	assert.Equal(t, 2, v2.refcount)
+
+	entry = d.DictFind(k2)
+	assert.NotNil(t, entry)
+	assert.Equal(t, k2, entry.Key)
+	assert.Equal(t, v2, entry.Val)
+
+	d.Set(k2, v1)
+	assert.Equal(t, 2, v1.refcount)
+	assert.Equal(t, 1, v2.refcount)
+
+	val = d.DictGet(k2)
+	assert.NotNil(t, val)
+	assert.Equal(t, v1, val)
 }
 
 func TestRehash(t *testing.T) {

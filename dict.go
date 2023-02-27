@@ -222,6 +222,16 @@ func (dict *Dict) DictFind(key *RedisObj) *DictEntry {
 	return nil
 }
 
+func (dict *Dict) Set(key, val *RedisObj) {
+	if err := dict.DictAdd(key, val); err == nil {
+		return
+	}
+	entry := dict.DictFind(key)
+	entry.Val.DecrRefCount()
+	entry.Val = val
+	val.IncrRefCount()
+}
+
 func freeEntry(e *DictEntry) {
 	e.Key.DecrRefCount()
 	e.Val.DecrRefCount()
@@ -257,6 +267,14 @@ func (dict *Dict) DictDelete(key *RedisObj) error {
 		}
 	}
 	return NK_ERR
+}
+
+func (dict *Dict) DictGet(key *RedisObj) *RedisObj {
+	entry := dict.DictFind(key)
+	if entry == nil {
+		return nil
+	}
+	return entry.Val
 }
 
 func (dict *Dict) DictGetRandomKey() *DictEntry {
