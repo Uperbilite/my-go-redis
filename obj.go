@@ -14,7 +14,7 @@ const (
 type RedisObj struct {
 	Type_    RedisType
 	Val_     RedisVal
-	refcount int
+	refCount int
 }
 
 func (o *RedisObj) IntVal() int64 {
@@ -36,25 +36,26 @@ func CreateFromInt(val int64) *RedisObj {
 	return &RedisObj{
 		Type_:    REDISSTR,
 		Val_:     strconv.FormatInt(val, 10),
-		refcount: 1,
+		refCount: 1,
 	}
 }
 
-func CreateObject(t RedisType, ptr interface{}) *RedisObj {
+func CreateObject(t RedisType, v interface{}) *RedisObj {
 	return &RedisObj{
 		Type_:    t,
-		Val_:     ptr,
-		refcount: 1,
+		Val_:     v,
+		refCount: 1,
 	}
 }
 
 func (o *RedisObj) IncrRefCount() {
-	o.refcount++
+	o.refCount++
 }
 
 func (o *RedisObj) DecrRefCount() {
-	o.refcount--
-	if o.refcount == 0 {
+	o.refCount--
+	if o.refCount == 0 {
+		// let GC clear the object.
 		o.Val_ = nil
 	}
 }
