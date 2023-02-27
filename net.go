@@ -17,6 +17,10 @@ func Read(fd int, buf []byte) (int, error) {
 	return unix.Read(fd, buf)
 }
 
+func Close(fd int) error {
+	return unix.Close(fd)
+}
+
 func Accept(fd int) (int, error) {
 	nfd, _, err := unix.Accept(fd)
 	// ignore client addr for now

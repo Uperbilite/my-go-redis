@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"log"
 	"os"
@@ -172,7 +171,7 @@ func freeClient(c *RedisClient) {
 	delete(server.clients, c.fd)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_READABLE)
 	server.aeLoop.AeDeleteFileEvent(c.fd, AE_WRITABLE)
-	unix.Close(c.fd)
+	Close(c.fd)
 }
 
 func resetClient(c *RedisClient) {
