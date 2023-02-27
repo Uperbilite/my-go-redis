@@ -27,6 +27,7 @@ func Accept(fd int) (int, error) {
 	return nfd, err
 }
 
+// Connect method for testing.
 func Connect(host [4]byte, port int) (int, error) {
 	s, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, 0)
 	if err != nil {
